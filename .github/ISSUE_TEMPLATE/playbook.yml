@@ -1,0 +1,18 @@
+name: Playbook contribution
+description: Propose reusable, human-readable operational or research guidance.
+title: "playbook: "
+body:
+  - type: textarea
+    id: audience
+    attributes:
+      label: Audience and outcome
+      description: State who uses the playbook and what safe, observable outcome it supports.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Inputs, outputs, and evidence
+      description: Specify inputs, outputs, constraints, provenance, and how a maintainer can review it without hidden state.
+    validations:
+      required: true

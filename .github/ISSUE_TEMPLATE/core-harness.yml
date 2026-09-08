@@ -1,0 +1,25 @@
+name: Core harness change
+description: Propose a change to Beryl controls, checks, sandbox behavior, or repository governance.
+title: "harness: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and intended outcome
+      description: Explain the current limitation, affected users, and desired behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed boundary and evidence
+      description: Name likely files, compatibility effects, and the deterministic check that should prove the change.
+    validations:
+      required: true
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Research integrity
+      options:
+        - label: This proposal does not fabricate data, expose secrets, or bypass the PRD green-light boundary.
+          required: true

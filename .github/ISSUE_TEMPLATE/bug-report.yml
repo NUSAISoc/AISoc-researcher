@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible failure in the harness or its checks.
+title: "bug: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: State the observed behavior and the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands, redacted inputs, environment, and exact failure output. Do not include secrets or participant data.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and scope
+      description: Link relevant logs, checks, or commits and identify the affected boundary.
+    validations:
+      required: true
