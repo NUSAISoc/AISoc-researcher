@@ -1,0 +1,53 @@
+% =====================================================================
+% Living study report (fork template).
+%
+% THIS IS A LIVING DOCUMENT. It is updated as the research progresses,
+% alongside ProjectProposal.md and docs/. The results section stays empty
+% of findings until real data exists; no fabricated results, ever.
+%
+% Build:  tectonic report.tex        (or: latexmk -pdf report.tex)
+% Word:   pandoc report.md -o report.docx   (Markdown body kept in sync)
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\graphicspath{{figures/}}
+
+\title{Living Study Report}
+\author{AISoc Researcher}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Replace this abstract with a short statement of the problem, the literature gap,
+the one research question, the design, and the fact that this is a living report
+whose results stay empty until real data is collected. No result is fabricated.
+\end{abstract}
+
+\tableofcontents
+
+\input{sections/introduction}
+\input{sections/method}
+\input{sections/results}
+
+\section{Threats to Validity and Conclusion Rules}
+The interpretation rules, the four-category threats-to-validity treatment
+(internal, construct, external, statistical-conclusion), and the criteria by
+which the study reaches a defensible claim are fixed in advance and recorded in
+\texttt{docs/08-evaluation.md}. A null result is a valid, reportable outcome
+provided the pre-registered analysis in \texttt{docs/07-statistical-analysis.md}
+is followed.
+
+\section*{References}
+The source index, with reading-depth tags, is maintained in
+\texttt{references.md}. The forward reading queue is in \texttt{readingList.md}.
+
+\end{document}
