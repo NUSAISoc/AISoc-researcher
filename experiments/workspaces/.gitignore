@@ -1,0 +1,3 @@
+# Disposable per-run sandboxes are local runtime state, never committed.
+*
+!.gitignore
