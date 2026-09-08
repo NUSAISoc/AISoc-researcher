@@ -1,0 +1,25 @@
+name: Experiment adapter
+description: Propose a new or revised experiment protocol integration.
+title: "experiment: "
+body:
+  - type: textarea
+    id: protocol
+    attributes:
+      label: Protocol and intended outcome
+      description: Describe inputs, outputs, control condition, and what the adapter must not do.
+    validations:
+      required: true
+  - type: textarea
+    id: reproducibility
+    attributes:
+      label: Reproducibility and safety evidence
+      description: Explain sandbox confinement, synthetic proof, ledger/log traceability, live-mode authorization, and secrets handling.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Verification plan
+      description: List the narrow test plus the deterministic gate and harness suite.
+    validations:
+      required: true

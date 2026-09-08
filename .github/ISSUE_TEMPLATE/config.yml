@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contribution guide
+    url: https://github.com/NUSAISoc/AISoc-researcher/blob/main/CONTRIBUTING.md
+    about: Read setup, verification, reproducibility, and review expectations before opening an issue.
