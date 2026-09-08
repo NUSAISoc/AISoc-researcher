@@ -1,0 +1,36 @@
+.beryl/agent/session-state.md
+__pycache__/
+*.pyc
+
+# Beryl update backups are local recovery state, not project evidence.
+.beryl/.updates/
+
+# The run-ledger lock is local runtime state, never committed.
+results/.ledger.lock
+
+# Per-run experiment logs are runtime output; the committed ledger stays
+# header-only until real, reviewed data is promoted. Keep the logs directory.
+results/logs/*.jsonl
+!results/logs/.gitkeep
+
+# Disposable experiment sandboxes are local runtime state (see
+# experiments/workspaces/.gitignore).
+
+# Report build artifacts are derived; rebuild from source.
+report/*.aux
+report/*.log
+report/*.toc
+report/*.out
+report/*.fdb_latexmk
+report/*.fls
+report/*.synctex.gz
+report/report.docx
+report/report.pdf
+report/parity.sha256
+# Figures under report/figures/ are committed once generated.
+# Results figures are only added once real data exists (never fabricated).
+
+# Environment / secrets never committed.
+.env
+*.env
+!.beryl/driver/config.example.env
