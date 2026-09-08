@@ -40,6 +40,10 @@ Python 3.11 or newer is required. Nothing else is needed for a synthetic run.
 
 4. **Make it your study.** Replace the placeholders, in one unit of work per change, following the workflow below.
 
+## Contributing
+
+Contributions are welcome through focused fork-based pull requests. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, contribution types, reproducibility rules, verification, and review expectations. The required protected-branch settings are recorded in [.github/branch-protection.md](.github/branch-protection.md).
+
 ## The researcher workflow
 
 1. **State your question.** Put your one research question into [docs/03-research-question.md](docs/03-research-question.md) and propagate it (identically) to every target the synchronization contract lists. Delete the placeholder everywhere.
