@@ -57,12 +57,17 @@ def run(config: ExperimentConfig, results_dir: "Path | None" = None) -> dict:
 
     status = "ok"
     records: List[Mapping[str, object]] = []
+    interrupt: "BaseException | None" = None
     sandbox = Sandbox(run_id).create()
     try:
         records = experiment(config, sandbox)
     except Exception as exc:  # noqa: BLE001 - failures are results, not exclusions
         status = "error"
         records = [{"status": "error", "error": repr(exc), "synthetic": config.synthetic}]
+    except BaseException as exc:  # Ctrl-C or sys.exit: record the run, then re-raise
+        status = "cancelled"
+        records = [{"status": "cancelled", "error": repr(exc), "synthetic": config.synthetic}]
+        interrupt = exc
     finally:
         sandbox.cleanup()
 
@@ -81,6 +86,8 @@ def run(config: ExperimentConfig, results_dir: "Path | None" = None) -> dict:
     }
     append_ledger_row(row, ledger_path)
     print(f"run {run_id}: status={status} records={len(records)} log={log_path}")
+    if interrupt is not None:
+        raise interrupt
     return row
 
 
