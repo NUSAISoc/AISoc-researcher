@@ -8,6 +8,7 @@ Use this checklist for every pull request before merging into `main`.
 - [ ] The contribution type has the evidence required by [CONTRIBUTING.md](../CONTRIBUTING.md).
 - [ ] The contributor has not included secrets, credentials, personal data, or unreviewed generated output.
 - [ ] Backward-compatibility and migration effects are stated or explicitly not applicable.
+- [ ] A playbook contribution meets [playbooks/review-rubric.md](../playbooks/review-rubric.md): reusable project-agnostic scope, honest evidence status, and no hidden state.
 
 ## Reproducibility and research integrity
 
