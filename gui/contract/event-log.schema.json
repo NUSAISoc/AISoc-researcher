@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event-log.schema.json",
+  "title": "An event, as the dashboard accepts it",
+  "description": "The dashboard's input format (envelope version 1), for event files it imports (default control/events.jsonl) and for POST /api/logs. The dashboard relies on the envelope fields and on the data fields listed per type in gui/README.md; unknown types and extra data fields are stored but not shown.",
+  "type": "object",
+  "required": [
+    "v",
+    "id",
+    "type",
+    "at",
+    "actor",
+    "subject",
+    "data"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "description": "see the event types table in gui/README.md; unknown types are stored but not shown"
+    },
+    "at": {
+      "type": "string",
+      "description": "UTC, format YYYY-MM-DDTHH:MM:SSZ"
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "human",
+            "agent",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "type",
+        "id",
+        "version"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

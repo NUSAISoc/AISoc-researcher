@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AISoc Researcher · Overview</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Subtle animations. To roll back, delete the next line (and optionally css/motion.css). -->
+  <link rel="stylesheet" href="css/motion.css">
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+
+  <dialog id="confirm" aria-labelledby="confirm-title">
+    <form method="dialog" id="confirm-form" novalidate>
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body" class="dlg-body"></p>
+      <label for="confirm-reason" class="dlg-label">Reason <span class="req">(required, recorded in the audit trail)</span></label>
+      <textarea id="confirm-reason" rows="3"></textarea>
+      <p id="confirm-error" class="dlg-error" role="alert" hidden>Enter a reason first.</p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+        <button type="submit" class="btn" id="confirm-ok"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" hidden></div>
+
+  <!-- Classic scripts (not modules) so the page also works when opened straight from disk (mock data). -->
+  <script src="js/icons.js"></script>
+  <script src="js/mock-adapter.js"></script>
+  <script src="js/http-adapter.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

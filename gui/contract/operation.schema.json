@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "operation.schema.json",
+  "title": "Operation returned by an accepted command",
+  "type": "object",
+  "required": [
+    "name",
+    "done",
+    "metadata"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "done": {
+      "type": "boolean"
+    },
+    "error": {
+      "type": "object"
+    },
+    "response": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "command",
+        "actor",
+        "requestedAt"
+      ],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string"
+        },
+        "requestedAt": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

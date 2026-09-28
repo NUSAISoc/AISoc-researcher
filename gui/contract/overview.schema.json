@@ -1,0 +1,497 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "overview.schema.json",
+  "title": "Overview read model",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "project",
+    "pipeline",
+    "work",
+    "findings",
+    "actions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "researchQuestion",
+        "stage",
+        "modelTraffic",
+        "data",
+        "asOf"
+      ],
+      "properties": {
+        "researchQuestion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/unavailable"
+            }
+          ]
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/notTracked"
+            }
+          ]
+        },
+        "modelTraffic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/notTracked"
+            },
+            {
+              "type": "object",
+              "required": [
+                "mode"
+              ]
+            }
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/notTracked"
+            },
+            {
+              "$ref": "#/$defs/unavailable"
+            },
+            {
+              "type": "object",
+              "required": [
+                "hasData"
+              ],
+              "properties": {
+                "hasData": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string"
+        }
+      }
+    },
+    "pipeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "icon"
+        ],
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "tracked": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "counts": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "$ref": "#/$defs/notTracked"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2
+            }
+          }
+        }
+      }
+    },
+    "work": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status",
+          "title",
+          "summary",
+          "urgency",
+          "actions",
+          "links",
+          "details"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "decision",
+              "failed",
+              "inconclusive",
+              "blocked",
+              "running",
+              "ok"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "object",
+            "required": [
+              "paused",
+              "blocks",
+              "waitingHours"
+            ],
+            "properties": {
+              "paused": {
+                "type": "boolean"
+              },
+              "blocks": {
+                "type": "integer"
+              },
+              "waitingHours": {
+                "type": "number"
+              }
+            }
+          },
+          "experiment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "agent": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "review",
+                "rerun",
+                "pause",
+                "resume",
+                "stop"
+              ]
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "href"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "href": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "synthetic": {
+            "type": "boolean"
+          },
+          "pendingOperation": {
+            "type": "object",
+            "required": [
+              "name",
+              "done"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "command": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/notTracked"
+        },
+        {
+          "$ref": "#/$defs/unavailable"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "version",
+              "verification",
+              "claim",
+              "effect",
+              "uncertainty",
+              "inferredBy"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "verification": {
+                "enum": [
+                  "unverified",
+                  "recheck",
+                  "verified",
+                  "rejected"
+                ]
+              },
+              "claim": {
+                "type": "string"
+              },
+              "effect": {
+                "type": "string"
+              },
+              "uncertainty": {
+                "type": "string"
+              },
+              "inferredBy": {
+                "type": "object",
+                "required": [
+                  "session",
+                  "agent",
+                  "model",
+                  "at"
+                ]
+              },
+              "reviewedBy": {
+                "type": "object",
+                "required": [
+                  "verb",
+                  "name",
+                  "at",
+                  "rationale"
+                ]
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "label",
+                        "href"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "href": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "actions": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/notTracked"
+        },
+        {
+          "$ref": "#/$defs/unavailable"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "actor",
+              "what"
+            ],
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "what": {
+                "type": "string"
+              },
+              "actor": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "human",
+                      "agent",
+                      "system",
+                      "unknown"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "context": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "description": "notTracked while no event log exists; {tracked: true} when decisions come from the event log (they then appear as work items with status decision).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/notTracked"
+        },
+        {
+          "$ref": "#/$defs/unavailable"
+        },
+        {
+          "type": "object",
+          "required": [
+            "tracked"
+          ],
+          "properties": {
+            "tracked": {
+              "const": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "notTracked": {
+      "type": "object",
+      "required": [
+        "tracked"
+      ],
+      "properties": {
+        "tracked": {
+          "const": false
+        }
+      }
+    },
+    "unavailable": {
+      "type": "object",
+      "required": [
+        "tracked",
+        "available",
+        "reason"
+      ],
+      "properties": {
+        "tracked": {
+          "const": true
+        },
+        "available": {
+          "const": false
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

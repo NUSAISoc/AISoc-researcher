@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "log-record.schema.json",
+  "title": "One line of the central log (gui/.local/log.jsonl)",
+  "type": "object",
+  "required": [
+    "v",
+    "logId",
+    "loggedAt",
+    "source",
+    "kind",
+    "entry"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "logId": {
+      "type": "string"
+    },
+    "loggedAt": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "description": "file:<path>, api:<source name> or dashboard"
+    },
+    "kind": {
+      "enum": [
+        "event",
+        "invalid",
+        "interaction"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "description": "event: the event as received; invalid: {raw, reason}; interaction: {command, actor, rationale?, requestId?, expectedVersion?, outcome: {code, status, message}}"
+    }
+  }
+}

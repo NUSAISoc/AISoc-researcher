@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "error.schema.json",
+  "title": "Error",
+  "type": "object",
+  "required": [
+    "error"
+  ],
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "BAD_REQUEST",
+            "RATIONALE_REQUIRED",
+            "NOT_FOUND",
+            "VERSION_CONFLICT",
+            "METHOD_NOT_ALLOWED",
+            "FORBIDDEN",
+            "PAYLOAD_TOO_LARGE",
+            "UNSUPPORTED",
+            "DISCONNECTED",
+            "INTERNAL"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

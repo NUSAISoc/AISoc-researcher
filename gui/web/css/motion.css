@@ -1,0 +1,82 @@
+/*
+  Subtle motion layer.
+  Everything animated lives in this file. To roll back, remove the
+  <link href="css/motion.css"> line in index.html. Without it every change
+  still happens, just instantly. The "is-fresh" class that app.js adds does
+  nothing without this file.
+
+  Timing and easing follow IBM Carbon's "productive" motion, which is meant
+  for task-focused tools (https://carbondesignsystem.com/elements/motion/overview/):
+  - standard curve for things that move and stay on screen (rows, sections, drawer)
+  - entrance curve for things that appear (menu, dialog, toast)
+  - closing is a little faster than opening, so dismissing feels responsive
+  Switched off entirely for people who ask for reduced motion.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    /* durations (Carbon: fast-01 70, fast-02 110, moderate-01 150, moderate-02 240) */
+    --m-hover: 70ms;
+    --m-small: 110ms;
+    --m-open: 240ms;
+    --m-close: 180ms;
+    --m-drawer-open: 200ms;
+    --m-drawer-close: 160ms;
+    /* easing (Carbon productive) */
+    --m-standard: cubic-bezier(.2, 0, .38, .9);
+    --m-entrance: cubic-bezier(0, 0, .38, .9);
+  }
+
+  /* Hover and focus colour changes fade instead of snapping. */
+  .row, .btn, .fbtn, .opt, .side-tab, .linkbtn, a, .pl .nm, .sec-btn {
+    transition: background-color var(--m-hover) linear, border-color var(--m-hover) linear, color var(--m-hover) linear;
+  }
+
+  /* Row details. The closed-state rule sets the closing timing; the open-state rule sets the opening timing. */
+  .det { transition: grid-template-rows var(--m-close) var(--m-standard); }
+  .item.open .det { transition: grid-template-rows var(--m-open) var(--m-standard); }
+  .det-inner { opacity: 0; transition: opacity var(--m-small) linear, visibility 0s linear var(--m-close); }
+  .item.open .det-inner { opacity: 1; transition: opacity var(--m-open) linear, visibility 0s; }
+  .exp { transition: transform var(--m-close) var(--m-standard); }
+  .item.open .exp { transition: transform var(--m-open) var(--m-standard); }
+
+  /* Work sections. Here "collapsed" is the added state, so the rules are the other way round. */
+  .sec-body { transition: grid-template-rows var(--m-open) var(--m-standard); }
+  .sec-wrap.collapsed .sec-body { transition: grid-template-rows var(--m-close) var(--m-standard); }
+  .sec-inner { transition: opacity var(--m-open) linear, visibility 0s; }
+  .sec-wrap.collapsed .sec-inner { opacity: 0; transition: opacity var(--m-small) linear, visibility 0s linear var(--m-close); }
+  .sec-exp { transition: transform var(--m-open) var(--m-standard); }
+  .sec-wrap.collapsed .sec-exp { transition: transform var(--m-close) var(--m-standard); }
+
+  /* Filter menu appears. */
+  .menu.is-fresh { animation: m-drop var(--m-small) var(--m-entrance); }
+
+  /* Detailed view switch: knob slides. */
+  .switch.is-fresh[aria-checked="true"] .th { animation: m-knob-on var(--m-small) var(--m-standard); }
+  .switch.is-fresh[aria-checked="false"] .th { animation: m-knob-off var(--m-small) var(--m-standard); }
+
+  /* A command was just requested: brief fading tint on the "requested" line and the new audit entry. */
+  .pending.is-fresh, .te.is-fresh { animation: m-tint 900ms ease-out; }
+
+  /* Dialog and toast appear. */
+  dialog[open] { animation: m-pop 150ms var(--m-entrance); }
+  dialog[open]::backdrop { animation: m-fade 150ms linear; }
+  #toast:not([hidden]) { animation: m-rise var(--m-open) var(--m-entrance); }
+
+  /* Tablet drawer: the whole panel slides; the dimmed area fades with it. */
+  @media (max-width: 1100px) {
+    .col-side { transition: transform var(--m-drawer-close) var(--m-standard), visibility 0s linear var(--m-drawer-close); }
+    .side-open .col-side { transition: transform var(--m-drawer-open) var(--m-standard), visibility 0s; }
+    .scrim { transition: opacity var(--m-drawer-close) linear; }
+    .side-open .scrim { transition: opacity var(--m-drawer-open) linear; }
+    .side-tab { transition: background-color var(--m-hover) linear, opacity var(--m-drawer-close) linear; }
+    .side-open .side-tab { opacity: 0; transition: opacity var(--m-small) linear; }
+  }
+}
+
+@keyframes m-drop  { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@keyframes m-fade  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes m-pop   { from { opacity: 0; transform: translateY(4px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes m-rise  { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes m-knob-on  { from { left: 2px; } to { left: 14px; } }
+@keyframes m-knob-off { from { left: 14px; } to { left: 2px; } }
+@keyframes m-tint  { from { background-color: rgba(127, 181, 163, .16); } to { background-color: transparent; } }

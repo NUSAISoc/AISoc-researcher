@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "health.schema.json",
+  "title": "Health",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "asOf",
+    "fingerprint",
+    "sources"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "asOf": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "exists"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "mtime": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

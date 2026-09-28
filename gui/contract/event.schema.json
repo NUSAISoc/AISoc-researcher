@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event.schema.json",
+  "title": "Server-sent event data",
+  "description": "Sent on GET /api/events. The SSE id field increases; the event field is one of the types below; data is this object.",
+  "type": "object",
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "enum": [
+        "hello",
+        "project.updated",
+        "run.updated",
+        "evidence.updated",
+        "audit.appended",
+        "finding.updated",
+        "decision.updated",
+        "opportunity.updated",
+        "campaign.updated",
+        "egress.updated",
+        "operation.updated"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "logs-request.schema.json",
+  "title": "POST /api/logs body",
+  "description": "An external source hands events to the dashboard's central log. Each event must match event-log.schema.json; items that do not are kept as invalid and reported back.",
+  "type": "object",
+  "required": [
+    "source",
+    "events"
+  ],
+  "properties": {
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "short name, letters, digits, _ . : -, at most 64"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1
+    }
+  }
+}

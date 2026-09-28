@@ -87,6 +87,7 @@ There is one main research question at a time; changing it is a universal update
 | [experiments/](experiments/) | The sandboxed autoresearch runner. |
 | [analysis/](analysis/) | Scripts that turn result logs into summaries and figures. |
 | [results/](results/) | The run ledger, per-run logs, and empty data templates. No fabricated data, ever. |
+| [gui/](gui/) | Researcher dashboard: a web page plus a local server (`python3 -m gui.server`) that shows the study's state, pending decisions and findings. See [gui/README.md](gui/README.md). |
 | [tests/](tests/) | Harness tests that enforce the standards. |
 | [.beryl/](.beryl/) | Beryl control plane: agent memory, task routing, and the deterministic check gate. |
 

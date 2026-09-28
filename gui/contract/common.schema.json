@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Shared markers",
+  "description": "A value with no source is notTracked. A value whose source exists but could not be read is unavailable.",
+  "$defs": {
+    "notTracked": {
+      "type": "object",
+      "required": [
+        "tracked"
+      ],
+      "properties": {
+        "tracked": {
+          "const": false
+        }
+      }
+    },
+    "unavailable": {
+      "type": "object",
+      "required": [
+        "tracked",
+        "available",
+        "reason"
+      ],
+      "properties": {
+        "tracked": {
+          "const": true
+        },
+        "available": {
+          "const": false
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
