@@ -15,6 +15,8 @@ This repository is a generalized, forkable autoresearch harness. It holds and en
 - The synchronization contract is a high-priority completion gate mapping each research boundary to its mandatory targets and requiring refreshed report source and artifact hashes (`.beryl/agent/synchronization-contract.md`).
 - The report PDF is rendered from the current Word report, with source and output hashes recorded in `report/parity.sha256` (`report/build-pdf-from-docx.sh`).
 
+The harness lifecycle architecture is settled in [ADR 0003](adr/0003-research-workflow-controls.md): canonical readable records plus a generated manifest, exact revision links, externally verified human approval, and retained revision/decision history. The complete contract is in [research workflow controls](../../docs/00-research-workflow-controls.md). This decision changes harness governance, not a fork's study design.
+
 ## Open Decisions (fill in when you fork)
 
 - The one research question, its sub-questions, and the domain.
