@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 
 RECORDS = "docs/workflow/records"
 HISTORY = "docs/workflow/history/records"
+ARTIFACT_HISTORY = "docs/workflow/history/artifacts"
 MANIFEST = "docs/workflow/manifest.json"
 INITIAL = {
     "evidence": "captured", "claim": "proposed", "gap": "identified",
@@ -42,6 +43,12 @@ APPROVED = {
     "campaign": {"approved", "active", "completed", "cancelled"},
     "run": {"authorized", "running", "completed", "failed"}, "evaluation": {"accepted"},
 }
+ACTIVE = {
+    "evidence": {"admitted"}, "claim": {"accepted"}, "gap": {"open"},
+    "opportunity": {"selected"}, "hypothesis": {"approved", "under_test"},
+    "campaign": {"approved", "active"}, "run": {"authorized", "running"},
+    "evaluation": {"accepted"}, "decision": {"approved"},
+}
 
 
 class WorkflowError(ValueError):
@@ -49,7 +56,22 @@ class WorkflowError(ValueError):
 
 
 def canonical_json(value) -> str:
-    return json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    return json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+
+
+def load_json(value):
+    def pairs(items):
+        result = {}
+        for key, item in items:
+            if key in result:
+                raise WorkflowError(f"duplicate JSON field: {key}")
+            result[key] = item
+        return result
+
+    def constant(name):
+        raise WorkflowError(f"nonstandard JSON value: {name}")
+
+    return json.loads(value, object_pairs_hook=pairs, parse_constant=constant)
 
 
 def sha256(value: str | bytes) -> str:
@@ -78,6 +100,13 @@ def encode_record(metadata: dict, body: str) -> str:
     return "```json\n" + canonical_json(metadata) + "```\n\n" + body
 
 
+def record_body(text: str) -> str:
+    match = re.match(r"\A```json\r?\n(.*?)\r?\n```\r?\n", text, re.DOTALL)
+    if match is None:
+        raise WorkflowError("missing fenced JSON metadata")
+    return text[match.end():].lstrip("\r\n")
+
+
 @dataclass(frozen=True)
 class Record:
     path: str
@@ -94,15 +123,15 @@ class Record:
 
     @property
     def active(self):
-        return not self.metadata.get("retirement") and self.metadata["status"] not in TERMINAL
+        return not self.metadata.get("retirement") and self.metadata["status"] in ACTIVE[self.metadata["type"]]
 
 
 def parse_record(text: str, path: str = "<record>") -> Record:
-    match = re.match(r"\A```json\n(.*?)\n```\n", text, re.DOTALL)
+    match = re.match(r"\A```json\r?\n(.*?)\r?\n```\r?\n", text, re.DOTALL)
     if not match:
         raise WorkflowError(f"{path}: missing fenced JSON metadata")
     try:
-        meta = json.loads(match.group(1))
+        meta = load_json(match.group(1))
     except json.JSONDecodeError as exc:
         raise WorkflowError(f"{path}: invalid JSON metadata") from exc
     if not isinstance(meta, dict):
@@ -158,7 +187,7 @@ def _check_link(item, path):
 
 
 def read_record(root: Path, path: str) -> Record:
-    return parse_record(safe_path(root, path).read_text(encoding="utf-8"), path)
+    return parse_record(safe_path(root, path).read_bytes().decode("utf-8"), path)
 
 
 @dataclass
@@ -171,6 +200,8 @@ def _scan(root: Path, replacements: dict[str, str]) -> RecordSet:
     current, versions = {}, {}
     for prefix in (HISTORY, RECORDS):
         directory = safe_path(root, prefix)
+        if directory.exists() and any(p.is_symlink() for p in directory.rglob("*")):
+            raise WorkflowError(f"symlink in record tree: {prefix}")
         paths = {p.relative_to(root).as_posix() for p in directory.rglob("*.md")} if directory.exists() else set()
         paths.update(p for p in replacements if p.startswith(prefix + "/") and p.endswith(".md"))
         for path in sorted(paths):
@@ -185,6 +216,13 @@ def _scan(root: Path, replacements: dict[str, str]) -> RecordSet:
                 current[rec.metadata["id"]] = rec
             elif path != f"{HISTORY}/{rec.metadata['id']}/{rec.metadata['revision']}.md":
                 raise WorkflowError(f"history path does not match revision: {path}")
+    for ident, rec in current.items():
+        history = [r for (name, _), r in versions.items() if name == ident]
+        ordered = sorted(r.metadata["revision"] for r in history)
+        if len(ordered) != rec.metadata["revision"] or any(revision != i + 1 for i, revision in enumerate(ordered)):
+            raise WorkflowError(f"{rec.path}: missing or future record revision; complete retained history required")
+        if any(r.metadata["type"] != rec.metadata["type"] or r.metadata["created_at"] != rec.metadata["created_at"] for r in history):
+            raise WorkflowError(f"{rec.path}: historical identity/type changed")
     return RecordSet(current, versions)
 
 
@@ -232,11 +270,18 @@ def validate_records(root: Path, replacements: dict[str, str] | None = None) -> 
             if not safe_path(root, path).is_file() and path not in replacements:
                 raise WorkflowError(f"{rec.path}: missing protocol reference")
             if status in APPROVED[kind]:
+                _check_artifact(root, path, meta["details"].get("protocol_sha256"), replacements, records.current.get(meta["id"]) != rec)
                 for item in meta["links"]:
                     if item["relation"] == "hypothesis":
                         target = records.versions[(item["id"], item["revision"])]
                         if target.metadata["status"] not in APPROVED["hypothesis"]:
                             raise WorkflowError(f"{rec.path}: campaign requires approved hypothesis")
+        if kind == "evaluation" and status == "accepted":
+            _check_artifact(root, meta["details"]["analysis_ref"], meta["details"].get("analysis_sha256"), replacements, records.current.get(meta["id"]) != rec)
+        if kind == "run" and status in APPROVED["run"]:
+            for item in meta["links"]:
+                if item["relation"] == "campaign" and records.versions[(item["id"], item["revision"])].metadata["status"] not in {"approved", "active", "completed"}:
+                    raise WorkflowError(f"{rec.path}: authorized run requires an approved campaign revision")
         if rec.active and records.current.get(meta["id"]) == rec and kind in {"campaign", "run"}:
             for item in meta["links"]:
                 if item["relation"] in {"hypothesis", "campaign"} and records.current.get(item["id"], records.versions[(item["id"], item["revision"])]).metadata.get("retirement"):
@@ -245,7 +290,39 @@ def validate_records(root: Path, replacements: dict[str, str] | None = None) -> 
             _check_run(root, rec, replacements)
         elif kind == "run" and status in {"completed", "failed"}:
             raise WorkflowError(f"{rec.path}: terminal run requires ledger/log references")
+    # Approval links may point back to their targets. Provenance dependencies may not cycle.
+    visiting, visited = set(), set()
+
+    def visit(key):
+        if key in visiting:
+            raise WorkflowError("cyclic provenance links")
+        if key in visited:
+            return
+        visiting.add(key)
+        for item in records.versions[key].metadata["links"]:
+            if item["relation"] in {"evidence", "hypothesis", "campaign", "run", "gap", "supersedes"}:
+                visit((item["id"], item["revision"]))
+        visiting.remove(key)
+        visited.add(key)
+
+    for key in records.versions:
+        visit(key)
     return records
+
+
+def _check_artifact(root, path, expected, replacements, historical=False):
+    if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise WorkflowError(f"{path}: approved artifact requires an exact sha256")
+    actual_path = safe_path(root, path)
+    content = replacements[path].encode() if path in replacements else actual_path.read_bytes() if actual_path.is_file() else None
+    if content is not None and sha256(content) == expected:
+        return
+    archived_path = f"{ARTIFACT_HISTORY}/{expected}.txt"
+    archived = safe_path(root, archived_path)
+    old = replacements.get(archived_path)
+    if historical and (old is not None and sha256(old) == expected or archived.is_file() and sha256(archived.read_bytes()) == expected):
+        return
+    raise WorkflowError(f"{path}: approved artifact revision changed or is unavailable")
 
 
 def _check_run(root, rec, replacements):
@@ -263,7 +340,14 @@ def _check_run(root, rec, replacements):
             raise WorkflowError(f"{rec.path}: ledger status mismatch")
         if matches[0].get("synthetic") not in {"true", "false"}:
             raise WorkflowError(f"{rec.path}: ledger synthetic marker required")
-        entries = [json.loads(line) for line in (replacements.get(log) or rp.read_text(encoding="utf-8")).splitlines() if line.strip()]
+        if not detail.get("config_hash") or detail["config_hash"] != matches[0].get("config_hash"):
+            raise WorkflowError(f"{rec.path}: ledger configuration revision mismatch")
+        if detail.get("ledger_row_sha256") != sha256(canonical_json(matches[0])):
+            raise WorkflowError(f"{rec.path}: ledger row revision mismatch")
+        log_text = replacements.get(log) or rp.read_bytes().decode("utf-8")
+        if detail.get("log_sha256") != sha256(log_text):
+            raise WorkflowError(f"{rec.path}: run log revision mismatch")
+        entries = [load_json(line) for line in log_text.splitlines() if line.strip()]
         if not entries or not log.endswith("/" + detail["run_id"] + ".jsonl"):
             raise WorkflowError(f"{rec.path}: missing or incorrect run log")
     except (KeyError, OSError, json.JSONDecodeError) as exc:
@@ -275,7 +359,7 @@ def validate_change(root: Path, replacements: dict[str, str], *, rollback=False)
     staged = dict(replacements)
     for path, text in replacements.items():
         safe_path(root, path)
-        if path.startswith(HISTORY + "/"):
+        if path.startswith("docs/workflow/history/"):
             raise WorkflowError("audited record history cannot be proposed directly")
         if path.startswith(RECORDS + "/"):
             if not path.endswith(".md"):
@@ -300,9 +384,33 @@ def validate_change(root: Path, replacements: dict[str, str], *, rollback=False)
                 if a["type"] == "decision" and a["status"] != "proposed" and (b["status"] != "superseded" or a["details"] != b["details"] or a["links"] != b["links"]):
                     raise WorkflowError(f"{path}: approved/rejected decision history cannot be rewritten")
                 if a["type"] == "run" and a["status"] in {"completed", "failed", "cancelled"}:
-                    raise WorkflowError(f"{path}: terminal run cannot be rewritten; create another run")
+                    old_links = [l for l in a["links"] if l["relation"] != "decision"]
+                    new_links = [l for l in b["links"] if l["relation"] != "decision"]
+                    if a["status"] != b["status"] or a["details"] != b["details"] or old_links != new_links or a["owner"] != b["owner"] or record_body(old.text) != record_body(text):
+                        raise WorkflowError(f"{path}: terminal run evidence cannot be rewritten; create another run")
                 staged[f"{HISTORY}/{a['id']}/{a['revision']}.md"] = old.text
+        elif safe_path(root, path).is_file():
+            old_content = safe_path(root, path).read_bytes().decode("utf-8")
+            staged[f"{ARTIFACT_HISTORY}/{sha256(old_content)}.txt"] = old_content
     return validate_records(root, staged)
+
+
+def run_reference(root: Path, run_id: str) -> dict:
+    """Read an existing runner-owned result; never create or alter run evidence."""
+    if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", run_id):
+        raise WorkflowError("invalid run id")
+    ledger_ref = "results/ledger.csv"
+    log_ref = f"results/logs/{run_id}.jsonl"
+    try:
+        rows = list(csv.DictReader(safe_path(root, ledger_ref).read_text(encoding="utf-8").splitlines()))
+        matching = [row for row in rows if row.get("run_id") == run_id]
+        if len(matching) != 1 or not matching[0].get("config_hash"):
+            raise WorkflowError("exactly one recorded run with configuration hash required")
+        return {"run_id": run_id, "ledger_ref": ledger_ref, "log_ref": log_ref,
+                "config_hash": matching[0]["config_hash"], "ledger_row_sha256": sha256(canonical_json(matching[0])),
+                "log_sha256": sha256(safe_path(root, log_ref).read_bytes())}
+    except OSError as exc:
+        raise WorkflowError("existing run ledger/log unavailable") from exc
 
 
 def build_manifest(root: Path, replacements=None) -> dict:
@@ -316,13 +424,17 @@ def build_manifest(root: Path, replacements=None) -> dict:
 
 
 def write_manifest(root: Path):
-    content = canonical_json(build_manifest(root))
-    path = safe_path(root, MANIFEST)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    from .transaction import locked, replace_file, JOURNAL
+    with locked(root):
+        if safe_path(root, JOURNAL).exists():
+            raise WorkflowError("unfinished transaction; recover before rebuilding manifest")
+        replace_file(safe_path(root, MANIFEST), canonical_json(build_manifest(root)).encode("utf-8"))
 
 
 def check_manifest(root: Path):
+    from .transaction import JOURNAL
+    if safe_path(root, JOURNAL).exists():
+        raise WorkflowError("unfinished transaction; recover before accepting the manifest")
     path = safe_path(root, MANIFEST)
     if not path.is_file() or path.read_text(encoding="utf-8") != canonical_json(build_manifest(root)):
         raise WorkflowError("manifest is missing or stale; regenerate from canonical records")

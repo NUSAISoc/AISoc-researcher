@@ -18,6 +18,11 @@ Use this checklist for every pull request before merging into `main`.
 
 ## Verification and merge
 
+- [ ] Lifecycle records pass `python3 -m workflow check`; changes preserve exact revision links and prior record/decision history.
+- [ ] A protected workflow edit has an inspectable proposal and approval tied to its exact digest/revision; trusted owner assignments and actual human review were verified independently of metadata.
+- [ ] The generated manifest matches current records; rollback/recovery preserves intervening history and unrelated edits.
+- [ ] Live required checks, branch protection, and reviewer-role assignments are explicitly configured; do not infer them from Beryl readiness or the repository policy file.
+
 - [ ] The narrow relevant check and the full deterministic gate passed.
 - [ ] Python harness tests passed, or an unavailable check is explained and accepted.
 - [ ] Tests were not weakened; intentional test and manifest changes have a stated rationale.

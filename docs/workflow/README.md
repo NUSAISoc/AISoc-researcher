@@ -11,3 +11,5 @@ python3 -m workflow rebuild
 ```
 
 `check` validates the files and exact revision links, then checks index parity. `manifest` prints the derived index without mutation. `rebuild` writes the derived index. Proposed record changes must preserve IDs and creation dates, increment revisions by one, and use allowed transitions. Human approval is checked separately when applying a proposal; an approved status alone is not proof of authorization.
+
+Use the [command guide](../../workflow/README.md) to prepare digest-named proposals, obtain verified human review, apply changes, recover interrupted writes, and prepare reviewed reversals. Reviewer assignments ship empty and require protected human review before application. Proposal files can be prepared offline with a local trusted policy revision. Direct edits to retained history, runner-owned results, and generated outputs are refused.

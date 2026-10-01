@@ -8,7 +8,7 @@ from pathlib import Path
 
 from workflow.records import (
     WorkflowError, encode_record, build_manifest, check_manifest,
-    validate_records, validate_change, write_manifest,
+    validate_records, validate_change, write_manifest, sha256, run_reference,
 )
 
 
@@ -17,7 +17,7 @@ def record(kind="evidence", ident="E1", status=None, revision=1, links=None, **e
         "evidence": {"source": "test-only source", "locator": "fixture", "reading_depth": "artifact", "limitations": "Not study evidence"},
         "hypothesis": {"statement": "Test-only proposition"},
         "decision": {"action": "approve test change", "reason": "Fixture review"},
-        "campaign": {"protocol_ref": "docs/protocol.md", "stopping_rules": "Stop after fixture execution"},
+        "campaign": {"protocol_ref": "docs/protocol.md", "protocol_sha256": sha256("Test-only protocol\n"), "stopping_rules": "Stop after fixture execution"},
         "run": {},
         "evaluation": {"analysis_ref": "test-only analysis", "conclusion": "inconclusive"},
         "claim": {"statement": "Test-only claim"},
@@ -62,6 +62,25 @@ class RecordChecksTest(unittest.TestCase):
     def test_empty_tree_has_no_fabricated_records(self):
         (self.root / self.path).unlink()
         self.assertEqual(build_manifest(self.root), {"schema_version": 1, "records": []})
+
+    def test_drafts_are_visible_but_not_active_research(self):
+        put(self.root, "docs/workflow/records/H1.md", record("hypothesis", "H1", links=[link("evidence", "E1")]))
+        rows = build_manifest(self.root)["records"]
+        self.assertFalse(next(r for r in rows if r["id"] == "H1")["active"])
+
+    def test_duplicate_json_keys_and_cyclic_provenance_are_rejected(self):
+        put(self.root, self.path, record().replace('"id": "E1",', '"id": "E1", "id": "E2",'))
+        with self.assertRaisesRegex(WorkflowError, "duplicate JSON"):
+            validate_records(self.root)
+        put(self.root, self.path, record(links=[link("evidence", "E2")]))
+        put(self.root, "docs/workflow/records/E2.md", record(ident="E2", links=[link("evidence", "E1")]))
+        with self.assertRaisesRegex(WorkflowError, "cyclic"):
+            validate_records(self.root)
+
+    def test_manifest_hashes_exact_bytes_with_crlf_line_endings(self):
+        content = record().replace("\n", "\r\n").encode("utf-8")
+        (self.root / self.path).write_bytes(content)
+        self.assertEqual(build_manifest(self.root)["records"][0]["sha256"], sha256(content))
 
     def test_duplicate_id_and_boolean_revision_are_rejected(self):
         put(self.root, "docs/workflow/records/duplicate.md", record())
@@ -144,11 +163,16 @@ class RecordChecksTest(unittest.TestCase):
         put(self.root, "docs/workflow/records/D1.md", record("decision", "D1", "approved", links=[link("target", "H1"), link("target", "C1"), link("target", "R1")]))
         with self.assertRaisesRegex(WorkflowError, "ledger"):
             validate_records(self.root)
-        put(self.root, "results/ledger.csv", "run_id,status,synthetic\nfixture-run,error,true\n")
+        put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\nfixture-run,error,true,fixture-configuration\n")
         put(self.root, "results/logs/fixture-run.jsonl", json.dumps({"status": "error", "synthetic": True}) + "\n")
+        put(self.root, "docs/workflow/records/R1.md", record("run", "R1", "failed", links=[link("campaign", "C1"), link("decision", "D1")], details=run_reference(self.root, "fixture-run")))
         validate_records(self.root)
-        put(self.root, "results/ledger.csv", "run_id,status,synthetic\nfixture-run,ok,true\n")
+        put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\nfixture-run,ok,true,fixture-configuration\n")
         with self.assertRaisesRegex(WorkflowError, "ledger status"):
+            validate_records(self.root)
+        put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\nfixture-run,error,true,fixture-configuration\n")
+        put(self.root, "docs/protocol.md", "Silently changed protocol\n")
+        with self.assertRaisesRegex(WorkflowError, "artifact revision"):
             validate_records(self.root)
 
 

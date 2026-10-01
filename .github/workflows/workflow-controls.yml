@@ -1,0 +1,28 @@
+name: Workflow Controls
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-records:
+    name: Workflow record checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Check current records and generated manifest
+        run: python3 -m workflow check
+      - name: Check revisions and retained history against the pull request base
+        if: github.event_name == 'pull_request'
+        env:
+          WORKFLOW_BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+        run: python3 -m workflow check --base "$WORKFLOW_BASE_COMMIT"
+      - name: Run workflow behavior tests
+        run: python3 -m unittest tests.test_workflow_records tests.test_workflow_changes
