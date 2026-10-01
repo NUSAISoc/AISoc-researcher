@@ -13,7 +13,7 @@ We welcome these contribution types:
 | Core harness | checks, control-plane scripts, sandbox behavior | deterministic checks and focused tests | backward compatibility, safety, and ownership boundaries |
 | Documentation | research workflow, setup, or clarification | changed links and Markdown checks | canonical boundary and synchronization contract |
 | Experiment adapter | a protocol integration or runner extension | offline or synthetic proof, ledger/log traceability | sandbox confinement, fail-closed live mode, and provenance |
-| Playbook | reusable human-readable guidance | clear inputs, outputs, and scope | no hidden state or conflicting policy |
+| Playbook | reusable, project-agnostic research guidance (see [playbooks/](playbooks/README.md)) | clear inputs, outputs, and scope | no hidden state or conflicting policy ([review rubric](playbooks/review-rubric.md)) |
 | Bug report | reproducible failure or regression | minimal reproduction and environment | scope, severity, and a protecting check |
 
 ## Local setup

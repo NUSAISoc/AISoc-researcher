@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "ablation-single-variable",
+      "version": "1.0.0",
+      "path": "playbooks/entries/ablation-single-variable/1.0.0.md",
+      "content_sha256": "895f232941aac2d579f2d0aa0ece1e62754184df42ce6aca70df2eac793b2447",
+      "evidence_status": "established",
+      "deprecated": null
+    },
+    {
+      "id": "fair-baseline-comparison",
+      "version": "1.0.0",
+      "path": "playbooks/entries/fair-baseline-comparison/1.0.0.md",
+      "content_sha256": "0c131f1f917d18c783bffc2516da81279c8277822061c6d00fbf77309676670b",
+      "evidence_status": "emerging",
+      "deprecated": null
+    }
+  ]
+}

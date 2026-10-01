@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this file to playbooks/adoptions.json in your project and record each playbook you use. It is a template, not a live registry file.",
+  "adoptions": [
+    {
+      "id": "fair-baseline-comparison",
+      "version": "1.0.0",
+      "content_sha256": "0c131f1f917d18c783bffc2516da81279c8277822061c6d00fbf77309676670b",
+      "influenced_decisions": ["docs/05-experiment-design.md", "docs/08-evaluation.md"],
+      "override": null,
+      "note": "Pinned for the baseline arm of the main experiment."
+    }
+  ]
+}
