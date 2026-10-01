@@ -34,6 +34,7 @@ def main(argv=None):
     sub.add_parser("recover", help="Recover an interrupted transaction without overwriting concurrent edits")
     run_ref = sub.add_parser("run-reference", help="Print exact references to an existing runner ledger/log")
     run_ref.add_argument("--run-id", required=True)
+    run_ref.add_argument("--archive", action="store_true", help="Prepare committed evidence replacement text and record details without writing")
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
@@ -73,8 +74,9 @@ def main(argv=None):
                 apply_approved_change(args.root, proposal, pull_number=args.pull_number, trusted_ref=args.trusted_base)
                 print("workflow: reviewed change applied; history preserved and manifest regenerated")
         elif args.command == "run-reference":
-            from .records import run_reference
-            print(canonical_json(run_reference(args.root, args.run_id)), end="")
+            from .records import run_reference, prepare_run_evidence
+            result = prepare_run_evidence(args.root, args.run_id) if args.archive else run_reference(args.root, args.run_id)
+            print(canonical_json(result), end="")
         else:
             from .transaction import recover
             recover(args.root)

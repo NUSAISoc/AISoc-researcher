@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .records import (HISTORY, ARTIFACT_HISTORY, MANIFEST, RECORDS, INITIAL, TRANSITIONS, WorkflowError, build_manifest, canonical_json,
+from .records import (HISTORY, ARTIFACT_HISTORY, RUN_EVIDENCE, MANIFEST, RECORDS, INITIAL, TRANSITIONS, WorkflowError, build_manifest, canonical_json,
                       encode_record, parse_record, record_body, load_json, safe_path, sha256, validate_change, validate_records)
 from .reviews import POLICY, GitHubReviews, trusted_policy, parse_policy
 from .transaction import JOURNAL, LOCK, commit_files, digest_file, locked, read_bytes
@@ -23,6 +23,8 @@ def category(path):
         return "safety"
     if path.startswith(".beryl/agent/"):
         return "instructions"
+    if path.startswith(RUN_EVIDENCE + "/"):
+        return "research"
     if path.startswith(("docs/", "notes/", "report/sections/")) or path in {"ProjectProposal.md", "references.md", "readingList.md", "report/report.md", "report/report.tex", "solution/PRD.md"}:
         return "research"
     if path.startswith(("workflow/", "tests/", ".github/")) or path in {"README.md", "CONTRIBUTING.md"}:
@@ -43,7 +45,7 @@ def _inputs(root: Path, changes):
             if text is None:
                 text = safe_path(root, path).read_text(encoding="utf-8")
             details = parse_record(text, path).metadata["details"]
-            for key in ("protocol_ref", "analysis_ref", "ledger_ref", "log_ref"):
+            for key in ("protocol_ref", "analysis_ref", "evidence_ref"):
                 if key in details:
                     paths.add(details[key])
     return {p: digest_file(root, p) for p in sorted(paths)}
@@ -76,6 +78,12 @@ def propose_change(root: Path, changes: dict[str, str], *, author: str, reason: 
         category(path)
         if not isinstance(text, str) or len(text.encode()) > 1024 * 1024 or read_bytes(root, path) == text.encode():
             raise WorkflowError("each proposed file must contain a nonempty change below 1 MiB")
+        if path.startswith(RUN_EVIDENCE + "/"):
+            from .records import read_run_evidence, prepare_run_evidence
+            archive = read_run_evidence(root, path, changes)
+            prepared = prepare_run_evidence(root, archive["run_id"])
+            if prepared["changes"] != {path: text}:
+                raise WorkflowError("proposed run evidence must match the existing runner row and log")
     if mode not in {"change", "rollback"}:
         raise WorkflowError("unknown proposal mode")
     evidence = evidence or []
@@ -262,7 +270,7 @@ def validate_tree_change(root: Path, base: str):
     names = git(root, "ls-tree", "-r", "--name-only", commit).splitlines()
     before_files = {}
     for name in names:
-        if name.startswith("docs/workflow/history/"):
+        if name.startswith(("docs/workflow/history/", RUN_EVIDENCE + "/")):
             old = subprocess.check_output(["git", "show", f"{commit}:{name}"], cwd=root)
             if read_bytes(root, name) != old:
                 raise WorkflowError(f"audited history changed or deleted: {name}")

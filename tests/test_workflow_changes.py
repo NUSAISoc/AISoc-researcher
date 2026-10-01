@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_workflow_records import record, put, link
+from tests.test_workflow_records import record, put, link, terminal_run_fixture
 from workflow.records import WorkflowError, canonical_json, check_manifest, write_manifest, sha256
 from workflow.changes import propose_change, validate_proposal, apply_approved_change, propose_rollback, validate_tree_change
 from workflow.reviews import GitHubReviews, RemoteNotFound
@@ -83,6 +83,86 @@ class ReviewedChangesTest(unittest.TestCase):
         self.assertEqual(receipt["reviews"][0]["reviewer"], "reviewer")
         check_manifest(self.root)
         validate_tree_change(self.root, self.base)
+
+    def test_terminal_runs_survive_checkout_and_do_not_block_unrelated_apply(self):
+        for status in ("completed", "failed"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as checkout:
+                terminal_run_fixture(self.root, status)
+                put(self.root, ".gitignore", "results/logs/*.jsonl\n")
+                write_manifest(self.root)
+                # Promote only the reviewed archive. The tracked runtime ledger stays empty.
+                ledger = self.root / "results/ledger.csv"
+                runtime_ledger = ledger.read_bytes()
+                ledger.write_text("run_id,status,synthetic,config_hash\n")
+                for args in (("add", "."), ("commit", "-qm", "Test-only reviewed run archive")):
+                    subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
+                ledger.write_bytes(runtime_ledger)
+                subprocess.run(["git", "clone", "-q", str(self.root), checkout], check=True, capture_output=True)
+                source_root, self.root = self.root, Path(checkout)
+                try:
+                    self.assertFalse((self.root / "results/logs/fixture-run.jsonl").exists())
+                    check_manifest(self.root)
+                    proposal = propose_change(self.root, {self.path: record(status="admitted", revision=2) + "Reviewed clarification.\n"},
+                                              author="test-agent", reason="Unrelated evidence edit", trusted_ref="HEAD")
+                    self.assertNotIn("results/ledger.csv", proposal["snapshot"])
+                    self.assertNotIn("results/logs/fixture-run.jsonl", proposal["snapshot"])
+                    self.apply(proposal)
+                    check_manifest(self.root)
+                    validate_tree_change(self.root, "HEAD")
+                    # Historical terminal records must also resolve the archive.
+                    run = self.root / "docs/workflow/records/R1.md"
+                    original = run.read_text()
+                    put(self.root, "docs/workflow/history/records/R1/1.md", original)
+                    meta = json.loads(original.split("```json\n", 1)[1].split("\n```", 1)[0])
+                    meta.update(revision=2, links=[link("campaign", "C1"), link("decision", "D2")])
+                    from workflow.records import encode_record
+                    put(self.root, "docs/workflow/records/D2.md", record("decision", "D2", "approved", links=[link("target", "R1", 2)]))
+                    put(self.root, "docs/workflow/records/R1.md", encode_record(meta, "Historical fixture check.\n"))
+                    write_manifest(self.root)
+                    check_manifest(self.root)
+                finally:
+                    self.root = source_root
+
+    def test_terminal_transition_applies_archive_in_same_reviewed_change(self):
+        from workflow.records import prepare_run_evidence
+        prepared = terminal_run_fixture(self.root)
+        archive_path = prepared["details"]["evidence_ref"]
+        (self.root / archive_path).unlink()
+        rpath, dpath = "docs/workflow/records/R1.md", "docs/workflow/records/D2.md"
+        put(self.root, rpath, record("run", "R1", "running", links=[link("campaign", "C1"), link("decision", "D1")]))
+        put(self.root, dpath, record("decision", "D2", links=[link("target", "R1")]))
+        write_manifest(self.root)
+        changes = dict(prepared["changes"])
+        changes[rpath] = record("run", "R1", "failed", revision=2, links=[link("campaign", "C1"), link("decision", "D2", 2)], details=prepared["details"])
+        changes[dpath] = record("decision", "D2", "approved", revision=2, links=[link("target", "R1", 2)])
+        proposal = propose_change(self.root, changes, author="test-agent", reason="Retain test-only runner evidence", trusted_ref="HEAD")
+        self.assertIsNone(proposal["snapshot"][archive_path])
+        self.assertFalse((self.root / archive_path).exists())
+        self.apply(proposal)
+        self.assertEqual((self.root / archive_path).read_text(), prepared["changes"][archive_path])
+        check_manifest(self.root)
+        with self.assertRaisesRegex(WorkflowError, "immutable"):
+            from workflow.records import validate_change
+            validate_change(self.root, prepared["changes"])
+
+    def test_archive_preparation_and_cli_refuse_invented_or_changed_runner_evidence(self):
+        from workflow.__main__ import main
+        from workflow.records import canonical_json, sha256
+        prepared = terminal_run_fixture(self.root)
+        archive_path = prepared["details"]["evidence_ref"]
+        (self.root / archive_path).unlink()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = main(["--root", str(self.root), "run-reference", "--run-id", "fixture-run", "--archive"])
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue()), prepared)
+        self.assertFalse((self.root / archive_path).exists())
+        archive = json.loads(prepared["changes"][archive_path])
+        archive["log"] = '{"invented":true}\n'
+        text = canonical_json(archive)
+        fake_path = f"results/evidence/fixture-run/{sha256(text)}.json"
+        with self.assertRaisesRegex(WorkflowError, "existing runner"):
+            propose_change(self.root, {fake_path: text}, author="test-agent", reason="Fixture tamper", trusted_ref="HEAD")
 
     def test_hypothesis_and_decision_are_approved_together_and_reversible(self):
         put(self.root, self.path, record(status="admitted"))

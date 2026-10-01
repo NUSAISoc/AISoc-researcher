@@ -11,7 +11,7 @@ python3 -m workflow rebuild
 python3 -m workflow check --base origin/main
 ```
 
-`check` verifies record metadata, exact provenance links, required decision targets, lifecycle states, existing run ledger/log references, and manifest parity. `--base` also checks changed record identities, revision increments, retained history, and application receipts. It is structural validation, not authentication of a receipt's reviewer fields. The `Workflow record checks` CI job runs those checks. Live branch-protection configuration and human PR review remain externally owned acceptance controls; neither this job nor Beryl readiness proves those settings are enabled.
+`check` verifies record metadata, exact provenance links, required decision targets, lifecycle states, committed run evidence archives, and manifest parity. `--base` also checks changed record identities, revision increments, retained history, and application receipts. It is structural validation, not authentication of a receipt's reviewer fields. The `Workflow record checks` CI job runs those checks. Live branch-protection configuration and human PR review remain externally owned acceptance controls; neither this job nor Beryl readiness proves those settings are enabled.
 
 ## Configure trusted human review
 
@@ -59,11 +59,21 @@ Rollback prepares another proposal and needs fresh review. It restores earlier c
 - `GitHubReviews(fetch=...)` is the external-system boundary. The default adapter only reads GitHub. Substitute it in deterministic tests, never accept an agent-supplied review JSON as an adapter.
 - Evidence tools, the UI, the runner, and playbooks use the same IDs/revisions. The runner keeps its ledger/log authority and execution behavior. Governance does not reinterpret a failed run as a scientific refutation.
 
-Approved campaigns include a protocol file hash, accepted evaluations include an analysis file hash, and terminal runs include a configuration hash and log hash. Derive run fields from existing results without writing them:
+Approved campaigns include a protocol file hash, accepted evaluations include an analysis file hash, and terminal runs include configuration, ledger-row, and log hashes. Inspect local runner references without writing them:
 
 ```bash
 python3 -m workflow run-reference --run-id EXISTING_RUN_ID
 ```
+
+Before submitting a completed, failed, or executed cancelled run, prepare its evidence archive:
+
+```bash
+python3 -m workflow run-reference --run-id EXISTING_RUN_ID --archive
+```
+
+This read-only command returns `details` for the run record and a `changes` mapping containing the exact archive text. Add that mapping to the same change set as the terminal run and its approval decision. Do not pre-write the archive: it is included in the proposal diff and created by reviewed application. Commit the resulting record, archive, retained revisions, receipt, and manifest together. If the same archive is already retained, reuse its `evidence_ref` and omit its unchanged text from the change set.
+
+Archives under `results/evidence/RUN_ID/SHA256.json` retain exactly one runner ledger row, its original ledger/log paths, and the exact UTF-8 log bytes (including line endings). Preparation refuses archives that differ from existing runner output. Archives are immutable and required for terminal records, including retained historical revisions. The original runtime outputs remain runner-owned and can be absent from a fresh checkout; available originals must agree with the archive. Remote approval snapshots bind the committed archive or its proposed text rather than ignored runtime logs or the mutable runtime ledger. Archive hashes verify integrity, while human review remains responsible for source authenticity and appropriate evidence disclosure. Existing terminal records without archives must have their original evidence retained before using this contract. The existing 1 MiB proposal limit applies to archive submissions too.
 
 Current records must resolve current source artifacts exactly. Historical records can resolve retained source artifacts under `docs/workflow/history/artifacts/`. Drafts remain visible but are excluded from active research until their approval requirements are met. Reviewed rollback preserves approved decision records rather than restoring their earlier proposed status.
 

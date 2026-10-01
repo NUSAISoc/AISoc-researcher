@@ -20,3 +20,7 @@ Bind approval to a reviewed proposal digest and GitHub commit, verify human revi
 - Tradeoff: generated-index parity, semantic conflicts, retention, and interrupted edits require explicit checks. A CLI cannot prevent privileged direct filesystem edits.
 - Rejected alternatives: full event sourcing adds replay/projection responsibilities; unstructured links alone cannot support uniform checks; a separately edited manifest would create another authority.
 - Follow-up: implement and verify the [workflow contract](../../../docs/00-research-workflow-controls.md), keep test fixtures separate from study evidence, and revisit event storage if concurrency or replay becomes central.
+
+## Clarification after PR #18 review
+
+Terminal run records require reviewed immutable archives of the existing runner ledger row and exact log bytes under `results/evidence/`. Runtime logs are ignored and the committed ledger can be header-only, so depending only on those local paths would break CI and remote approval verification. Prepare the archive without writing, include its text with the terminal record proposal, and retain it through reviewed application. Reject changes to retained archives and mismatches with available runtime originals. The runner keeps source authority. Skipping absent evidence was rejected because a fresh checkout must still verify the terminal record. This repair does not change experiment behavior or fabricate/promote study data.

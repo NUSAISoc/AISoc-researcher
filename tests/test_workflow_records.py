@@ -8,7 +8,7 @@ from pathlib import Path
 
 from workflow.records import (
     WorkflowError, encode_record, build_manifest, check_manifest,
-    validate_records, validate_change, write_manifest, sha256, run_reference,
+    validate_records, validate_change, write_manifest, sha256, run_reference, prepare_run_evidence,
 )
 
 
@@ -39,6 +39,23 @@ def put(root, name, text):
     path = root / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def terminal_run_fixture(root, status="failed"):
+    """Test-only runner output and linked records; never write study results."""
+    put(root, "docs/workflow/records/E1.md", record(status="admitted"))
+    put(root, "docs/protocol.md", "Test-only protocol\n")
+    put(root, "docs/workflow/records/H1.md", record("hypothesis", "H1", "approved", links=[link("evidence", "E1"), link("decision", "D1")]))
+    put(root, "docs/workflow/records/C1.md", record("campaign", "C1", "active", links=[link("hypothesis", "H1"), link("decision", "D1")]))
+    put(root, "docs/workflow/records/D1.md", record("decision", "D1", "approved", links=[link("target", "H1"), link("target", "C1"), link("target", "R1")]))
+    execution_status = {"completed": "ok", "failed": "error"}[status]
+    put(root, "results/ledger.csv", f"run_id,status,synthetic,config_hash\nfixture-run,{execution_status},true,fixture-configuration\n")
+    put(root, "results/logs/fixture-run.jsonl", json.dumps({"status": execution_status, "synthetic": True}) + "\r\n")
+    prepared = prepare_run_evidence(root, "fixture-run")
+    for path, text in prepared["changes"].items():
+        put(root, path, text)
+    put(root, "docs/workflow/records/R1.md", record("run", "R1", status, links=[link("campaign", "C1"), link("decision", "D1")], details=prepared["details"]))
+    return prepared
 
 
 class RecordChecksTest(unittest.TestCase):
@@ -165,7 +182,10 @@ class RecordChecksTest(unittest.TestCase):
             validate_records(self.root)
         put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\nfixture-run,error,true,fixture-configuration\n")
         put(self.root, "results/logs/fixture-run.jsonl", json.dumps({"status": "error", "synthetic": True}) + "\n")
-        put(self.root, "docs/workflow/records/R1.md", record("run", "R1", "failed", links=[link("campaign", "C1"), link("decision", "D1")], details=run_reference(self.root, "fixture-run")))
+        prepared = prepare_run_evidence(self.root, "fixture-run")
+        for path, text in prepared["changes"].items():
+            put(self.root, path, text)
+        put(self.root, "docs/workflow/records/R1.md", record("run", "R1", "failed", links=[link("campaign", "C1"), link("decision", "D1")], details=prepared["details"]))
         validate_records(self.root)
         put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\nfixture-run,ok,true,fixture-configuration\n")
         with self.assertRaisesRegex(WorkflowError, "ledger status"):
@@ -174,6 +194,35 @@ class RecordChecksTest(unittest.TestCase):
         put(self.root, "docs/protocol.md", "Silently changed protocol\n")
         with self.assertRaisesRegex(WorkflowError, "artifact revision"):
             validate_records(self.root)
+
+    def test_terminal_archive_requires_exact_evidence_even_without_runtime_files(self):
+        prepared = terminal_run_fixture(self.root)
+        (self.root / "results/logs/fixture-run.jsonl").unlink()
+        put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\n")
+        validate_records(self.root)
+        archive_path = prepared["details"]["evidence_ref"]
+        original = (self.root / archive_path).read_bytes()
+        archive = json.loads(original)
+        self.assertTrue(archive["log"].endswith("\r\n"))
+        archive["log"] += '{"tampered":true}\n'
+        put(self.root, archive_path, json.dumps(archive))
+        with self.assertRaisesRegex(WorkflowError, "evidence archive"):
+            validate_records(self.root)
+        (self.root / archive_path).write_bytes(original)
+        (self.root / archive_path).unlink()
+        with self.assertRaisesRegex(WorkflowError, "evidence archive"):
+            validate_records(self.root)
+
+    def test_run_evidence_preparation_is_read_only_and_rejects_missing_source(self):
+        prepared = terminal_run_fixture(self.root)
+        archive_path = prepared["details"]["evidence_ref"]
+        (self.root / archive_path).unlink()
+        again = prepare_run_evidence(self.root, "fixture-run")
+        self.assertEqual(again, prepared)
+        self.assertFalse((self.root / archive_path).exists())
+        (self.root / "results/logs/fixture-run.jsonl").unlink()
+        with self.assertRaisesRegex(WorkflowError, "unavailable"):
+            prepare_run_evidence(self.root, "fixture-run")
 
 
 if __name__ == "__main__":

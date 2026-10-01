@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 RECORDS = "docs/workflow/records"
 HISTORY = "docs/workflow/history/records"
 ARTIFACT_HISTORY = "docs/workflow/history/artifacts"
+RUN_EVIDENCE = "results/evidence"
 MANIFEST = "docs/workflow/manifest.json"
 INITIAL = {
     "evidence": "captured", "claim": "proposed", "gap": "identified",
@@ -325,31 +326,71 @@ def _check_artifact(root, path, expected, replacements, historical=False):
     raise WorkflowError(f"{path}: approved artifact revision changed or is unavailable")
 
 
+def read_run_evidence(root, path, replacements=None):
+    """Read a content-addressed copy of one runner row and its exact log bytes."""
+    replacements = replacements or {}
+    try:
+        content = replacements[path].encode("utf-8") if path in replacements else safe_path(root, path).read_bytes()
+        archive = load_json(content)
+        fields = {"schema_version", "run_id", "ledger_ref", "log_ref", "ledger_row", "log"}
+        if not isinstance(archive, dict) or set(archive) != fields or type(archive["schema_version"]) is not int or archive["schema_version"] != 1:
+            raise WorkflowError("invalid run evidence archive schema")
+        run_id = archive["run_id"]
+        if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", run_id):
+            raise WorkflowError("invalid run evidence archive run id")
+        if path != f"{RUN_EVIDENCE}/{run_id}/{sha256(content)}.json":
+            raise WorkflowError("run evidence archive path/hash mismatch")
+        row = archive["ledger_row"]
+        if not isinstance(row, dict) or not row or any(not isinstance(k, str) or not isinstance(v, str) for k, v in row.items()) or row.get("run_id") != run_id:
+            raise WorkflowError("invalid run evidence archive ledger row")
+        if archive["ledger_ref"] != "results/ledger.csv" or archive["log_ref"] != f"results/logs/{run_id}.jsonl":
+            raise WorkflowError("invalid run evidence archive source reference")
+        if not isinstance(archive["log"], str) or not archive["log"].strip():
+            raise WorkflowError("missing run evidence archive log")
+        entries = [load_json(line) for line in archive["log"].splitlines() if line.strip()]
+        if any(not isinstance(entry, dict) for entry in entries):
+            raise WorkflowError("invalid run evidence archive log entries")
+        return archive
+    except (OSError, UnicodeError, KeyError, json.JSONDecodeError) as exc:
+        raise WorkflowError("missing or invalid run evidence archive") from exc
+
+
 def _check_run(root, rec, replacements):
     detail = rec.metadata["details"]
     try:
         ledger = detail["ledger_ref"]
         log = detail["log_ref"]
+        if not detail.get("evidence_ref"):
+            raise WorkflowError(f"{rec.path}: ledger/log evidence archive required; prepare run-reference --archive")
+        archive = read_run_evidence(root, detail["evidence_ref"], replacements)
+        if any(archive[key] != detail[key] for key in ("run_id", "ledger_ref", "log_ref")):
+            raise WorkflowError(f"{rec.path}: run evidence archive source mismatch")
+        row = archive["ledger_row"]
+        # Runtime originals can be absent in a checkout. When available, they must agree.
         lp, rp = safe_path(root, ledger), safe_path(root, log)
-        rows = list(csv.DictReader((replacements.get(ledger) or lp.read_text(encoding="utf-8")).splitlines()))
-        matches = [r for r in rows if r.get("run_id") == detail["run_id"]]
-        if len(matches) != 1:
-            raise WorkflowError(f"{rec.path}: exactly one ledger row required")
+        if lp.is_file() or ledger in replacements:
+            text = replacements[ledger] if ledger in replacements else lp.read_bytes().decode("utf-8")
+            matches = [r for r in csv.DictReader(text.splitlines()) if r.get("run_id") == detail["run_id"]]
+            if len(matches) > 1:
+                raise WorkflowError(f"{rec.path}: exactly one ledger row required")
+            if matches and matches[0] != row:
+                raise WorkflowError(f"{rec.path}: ledger status/configuration/row differs from evidence archive")
         expected = {"completed": "ok", "failed": "error", "cancelled": "cancelled"}[rec.metadata["status"]]
-        if matches[0].get("status") != expected:
+        if row.get("status") != expected:
             raise WorkflowError(f"{rec.path}: ledger status mismatch")
-        if matches[0].get("synthetic") not in {"true", "false"}:
+        if row.get("synthetic") not in {"true", "false"}:
             raise WorkflowError(f"{rec.path}: ledger synthetic marker required")
-        if not detail.get("config_hash") or detail["config_hash"] != matches[0].get("config_hash"):
+        if not detail.get("config_hash") or detail["config_hash"] != row.get("config_hash"):
             raise WorkflowError(f"{rec.path}: ledger configuration revision mismatch")
-        if detail.get("ledger_row_sha256") != sha256(canonical_json(matches[0])):
+        if detail.get("ledger_row_sha256") != sha256(canonical_json(row)):
             raise WorkflowError(f"{rec.path}: ledger row revision mismatch")
-        log_text = replacements.get(log) or rp.read_bytes().decode("utf-8")
+        log_text = archive["log"]
         if detail.get("log_sha256") != sha256(log_text):
             raise WorkflowError(f"{rec.path}: run log revision mismatch")
-        entries = [load_json(line) for line in log_text.splitlines() if line.strip()]
-        if not entries or not log.endswith("/" + detail["run_id"] + ".jsonl"):
-            raise WorkflowError(f"{rec.path}: missing or incorrect run log")
+        if rp.is_file() or log in replacements:
+            original = replacements[log].encode("utf-8") if log in replacements else rp.read_bytes()
+            if sha256(original) != detail["log_sha256"]:
+                raise WorkflowError(f"{rec.path}: run log differs from evidence archive")
     except (KeyError, OSError, json.JSONDecodeError) as exc:
         raise WorkflowError(f"{rec.path}: missing or invalid ledger/log reference") from exc
 
@@ -361,7 +402,11 @@ def validate_change(root: Path, replacements: dict[str, str], *, rollback=False)
         safe_path(root, path)
         if path.startswith("docs/workflow/history/"):
             raise WorkflowError("audited record history cannot be proposed directly")
-        if path.startswith(RECORDS + "/"):
+        if path.startswith(RUN_EVIDENCE + "/"):
+            if safe_path(root, path).exists():
+                raise WorkflowError("run evidence archives are immutable; submit another run")
+            read_run_evidence(root, path, replacements)
+        elif path.startswith(RECORDS + "/"):
             if not path.endswith(".md"):
                 raise WorkflowError("current records must be Markdown")
             new = parse_record(text, path)
@@ -411,6 +456,23 @@ def run_reference(root: Path, run_id: str) -> dict:
                 "log_sha256": sha256(safe_path(root, log_ref).read_bytes())}
     except OSError as exc:
         raise WorkflowError("existing run ledger/log unavailable") from exc
+
+
+def prepare_run_evidence(root: Path, run_id: str) -> dict:
+    """Prepare an exact evidence archive and record details without writing files."""
+    details = run_reference(root, run_id)
+    rows = list(csv.DictReader(safe_path(root, details["ledger_ref"]).read_bytes().decode("utf-8").splitlines()))
+    matching = [row for row in rows if row.get("run_id") == run_id]
+    log = safe_path(root, details["log_ref"]).read_bytes().decode("utf-8")
+    if len(matching) != 1 or sha256(canonical_json(matching[0])) != details["ledger_row_sha256"] or sha256(log) != details["log_sha256"]:
+        raise WorkflowError("run evidence changed during capture; retry")
+    archive = {"schema_version": 1, "run_id": run_id, "ledger_ref": details["ledger_ref"],
+               "log_ref": details["log_ref"], "ledger_row": matching[0], "log": log}
+    text = canonical_json(archive)
+    path = f"{RUN_EVIDENCE}/{run_id}/{sha256(text)}.json"
+    read_run_evidence(root, path, {path: text})
+    details["evidence_ref"] = path
+    return {"details": details, "changes": {path: text}}
 
 
 def build_manifest(root: Path, replacements=None) -> dict:
