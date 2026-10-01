@@ -11,6 +11,7 @@ Every file below ships as a fork template. Replace its placeholders with your st
 | File | Step | Purpose |
 | --- | --- | --- |
 | [00-beryl-provenance.md](00-beryl-provenance.md) | Setup | Which Beryl release governs the control plane and how it was verified. |
+| [00-research-workflow-controls.md](00-research-workflow-controls.md) | Harness governance | Lifecycle records, ownership, reviewed edits, rollback, and retention for issue #6. |
 | [01-literature-review.md](01-literature-review.md) | 1 | The literature review: what is known, organised by theme, with the gap this study addresses. |
 | [02-problem-analysis.md](02-problem-analysis.md) | 2 | Systems Thinking analysis of the problem and where the improvement lies. |
 | [03-research-question.md](03-research-question.md) | 3 | The single main research question, its sub-questions, and how it was derived. |

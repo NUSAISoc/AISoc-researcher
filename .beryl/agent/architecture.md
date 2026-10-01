@@ -12,8 +12,10 @@ This repository is a research harness, not an application. Its "architecture" is
 | `solution/` | The PRD for the solution, and later the solution app as a submodule. | Application code before green-light. |
 | `experiments/` | The sandboxed autoresearch pipeline: runner, config, disposable workspaces, and the ledger writer. Executes experiments automatically and reproducibly. | Research narrative or fabricated data. |
 | `analysis/` | Scripts that turn structured result logs into summary statistics and figures. | Raw run capture (that is `experiments/` and `results/`). |
-| `results/` | Structured result logs, the run ledger, and empty data templates. | Any fabricated data. |
+| `results/` | Structured result logs, the run ledger, reviewed immutable run evidence archives, and empty data templates. | Any fabricated data. |
 | `tests/` | Harness tests enforcing the standards. | Application tests (those live in the submodule). |
+| `docs/workflow/` | Canonical lifecycle records, generated manifest, and retained revisions/receipts. References existing study definitions. | A competing study protocol or a copy of runner-owned results. |
+| `workflow/` | Record validation, index generation, reviewed proposals, approval verification adapter, and recoverable application. | Scientific conclusions, execution backends, UI rendering, or contributor administration. |
 | `.beryl/` | The control plane: agent memory, routing, and the deterministic gate. | Research content; it references it but does not hold it. |
 
 ## The autoresearch pipeline
@@ -22,4 +24,8 @@ This repository is a research harness, not an application. Its "architecture" is
 
 ## Synchronisation rule
 
+The [workflow control contract](../../docs/00-research-workflow-controls.md) and [ADR 0003](adr/0003-research-workflow-controls.md) define exact record references and the read/propose/validate/apply boundary. The manifest is rebuilt from canonical records. Approval comes from verified review against trusted policy; live branch protection, reviewer assignments, and backups remain external ownership. Do not infer those controls from local metadata or Beryl readiness.
+
 A change is made at its correct boundary in `docs/` and propagated to the other files that hold the same information (`ProjectProposal.md`, `report/`, `notes/`, `solution/`, `results/`, and the experiment config where it encodes the design), with superseded content deleted. `.beryl/agent/synchronization-contract.md` is the authoritative target map and publication-chain contract; `.beryl/agent/systems-thinking-methodology.md` is the required method for problem and solution work. The Research Verification Gate and deterministic harness tests enforce both.
+
+Terminal workflow records bind immutable, reviewed copies of exact runner ledger rows and log bytes under `results/evidence/`. The runner retains source authority; workflow preparation reads its output and application retains only explicitly reviewed evidence. CI resolves these archives from Git, and available runtime originals must match. Archives are not an alternative writable ledger or execution backend.

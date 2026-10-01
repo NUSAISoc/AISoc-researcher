@@ -61,6 +61,8 @@ The protected `main` branch accepts ordinary changes only through a pull request
 
 ## Generated artifacts and provenance
 
+For lifecycle records and agent-proposed Markdown changes, follow the [workflow controls](docs/00-research-workflow-controls.md) and [command guide](workflow/README.md). Review the exact proposal diff and rationale, confirm that the responsible human owner approves its revision, and retain the application receipt and previous record revisions. The generated lifecycle manifest must match the canonical records. `python3 -m workflow check` validates it; `python3 -m workflow check --base origin/main` also checks record transitions and retained history. Human reviewer assignments and live protected-branch settings remain external ownership. Do not treat an editable approval label or a local passing check as proof of human authorization.
+
 Do not hand-edit generated Word, PDF, hash, log, ledger, or analysis artifacts. When a research-content change requires report publication, regenerate it through the documented command and include the refreshed artifacts and hashes in the same pull request. Cite the source, protocol, issue, or authorization that establishes any new provenance claim. If a required artifact cannot be generated locally, explain why and ask a maintainer before merging.
 
 ## Review expectations

@@ -7,6 +7,7 @@ Structured result logs, the run ledger, and empty data templates. **Everything h
 | Path | One row per | Purpose |
 | --- | --- | --- |
 | [ledger.csv](ledger.csv) | experiment run | The audit trail. Every run of `experiments/run_experiment.py` appends exactly one row. A result not traceable to a ledger row does not exist. Written by the runner. |
+| [evidence/](evidence/) | reviewed run | Immutable hash-addressed JSON archive of an existing runner ledger row and exact log, retained with a reviewed terminal workflow record. Empty until evidence is explicitly promoted. |
 | [logs/](logs/) | run | Per-run JSON Lines result logs written by the runner. One `.jsonl` file per run, named by `run_id`. |
 | [participants.csv](participants.csv) | participant / subject | Anonymous code and condition. No identifying data. Header-only template. |
 | [measurements.csv](measurements.csv) | observation | The outcome metric and any covariates, keyed by subject and condition. Header-only template. |
@@ -21,3 +22,7 @@ Structured result logs, the run ledger, and empty data templates. **Everything h
 ## Ledger schema
 
 `ledger.csv` columns: `run_id`, `timestamp_utc`, `mode`, `experiment`, `config_hash`, `synthetic`, `num_records`, `status`, `notes`.
+
+## Reviewed run evidence
+
+Runtime logs are ignored by Git and the committed ledger may remain header-only. A terminal workflow record therefore requires a reviewed archive under `evidence/RUN_ID/SHA256.json`. Use `python3 -m workflow run-reference --run-id EXISTING_RUN_ID --archive` to derive the archive and record details from existing runner output without writing files, then include the returned archive text in the terminal record proposal. See the [workflow command guide](../workflow/README.md). The archive retains one exact ledger row, the original source paths, and exact log bytes; it does not hand-edit the runner ledger or logs. Its synthetic marker remains intact. Approved archives are immutable and remain available to CI and retained record revisions after runtime files are absent. Do not retain secrets or participant-identifying data. Promoting actual study results into research conclusions still follows the synchronization contract.

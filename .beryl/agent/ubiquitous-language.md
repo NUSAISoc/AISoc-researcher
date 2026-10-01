@@ -20,6 +20,18 @@ The shared vocabulary of this research harness. These terms describe the harness
 | User-facing surface | The three documents the researcher reads: `ProjectProposal.md`, `report/`, and `notes/`. | calling `docs/` user-facing |
 | Synchronization contract | The completion gate mapping each research boundary to the targets it must be propagated to. | skipping targets |
 
+## Workflow terms
+
+| Workflow term | Definition |
+| --- | --- |
+| Lifecycle record | A readable canonical file with a stable ID, type, owner, revision, status, and exact provenance links. |
+| Manifest | A deterministic generated index of current lifecycle records; never an independent source of research decisions. |
+| Campaign | An approved experiment plan grouping runs that test specified hypothesis revisions. |
+| Proposal | An inspectable exact change set with rationale, evidence, before hashes, and input snapshot; preparing it does not apply it. |
+| Approval decision | A record explaining authorization; actual authority requires externally verified human review of the exact proposal. |
+| Retirement | A disposition that removes an item from active work while retaining its lifecycle status and history. |
+| Reviewed rollback | A newly approved revision restoring prior content while preserving the intervening audit trail. |
+
 ## Study-specific terms (fill in when you fork)
 
 > `<Define the intervention, the control condition, the outcome construct, and any instruments your study uses, so every document uses the same words for the same things.>`
