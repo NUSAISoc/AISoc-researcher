@@ -79,8 +79,8 @@ def main(argv=None):
             print(canonical_json(result), end="")
         else:
             from .transaction import recover
-            recover(args.root)
-            print("workflow: transaction recovered")
+            result = recover(args.root)
+            print("workflow: abandoned lock cleared; no transaction writes to recover" if result == "lock-cleared" else "workflow: transaction recovered")
         return 0
     except (WorkflowError, OSError, UnicodeError, ValueError, TypeError) as exc:
         print(f"workflow: {exc}", file=sys.stderr)

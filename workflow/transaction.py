@@ -82,9 +82,8 @@ def commit_files(root: Path, files: dict[str, bytes]):
 
 def recover(root: Path):
     path = safe_path(root, JOURNAL)
-    if not path.exists():
-        raise WorkflowError("no transaction to recover")
     lock = safe_path(root, LOCK)
+    cleared_lock = False
     if lock.exists():
         try:
             pid = int(lock.read_text())
@@ -93,11 +92,17 @@ def recover(root: Path):
             os.kill(pid, 0)
         except ProcessLookupError:
             lock.unlink()
-        except (ValueError, PermissionError, OverflowError) as exc:
+            cleared_lock = True
+        except (ValueError, OSError, OverflowError) as exc:
             raise WorkflowError("cannot establish that the transaction lock is abandoned") from exc
         else:
             raise WorkflowError("transaction owner is still running")
     with locked(root):
+        # Approval verification holds the lock before any write journal exists.
+        if not path.exists():
+            if cleared_lock:
+                return "lock-cleared"
+            raise WorkflowError("no transaction to recover")
         try:
             journal = json.loads(path.read_text())
             if journal["schema_version"] != 1 or journal["state"] not in {"prepared", "committed"}:
@@ -122,6 +127,7 @@ def recover(root: Path):
                 for target, before in reversed(decoded):
                     replace_file(target, before)
             path.unlink()
+            return "transaction-recovered"
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             if isinstance(exc, WorkflowError):
                 raise

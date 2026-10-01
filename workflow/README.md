@@ -47,7 +47,7 @@ python3 -m workflow recover
 python3 -m workflow rollback --digest APPLIED_PROPOSAL_DIGEST --author YOUR_NAME --reason "Explain the reversal" --save
 ```
 
-Recovery restores the pre-application state after an interrupted transaction and refuses to overwrite subsequent edits. A committed transaction with a leftover journal is finalized without undoing it. An abandoned process lock is removable only when its process is no longer alive. Transaction state is temporary and must not be committed.
+Recovery restores the pre-application state after an interrupted transaction and refuses to overwrite subsequent edits. A committed transaction with a leftover journal is finalized without undoing it. Recovery inspects the process lock even when no transaction journal exists. It removes a confirmed dead owner's lock and reports that no writes needed recovery; a live, invalid, or uncertain owner keeps its lock. With a journal, it then recovers the transaction as before. Transaction state is temporary and must not be committed.
 
 Rollback prepares another proposal and needs fresh review. It restores earlier content with incremented record revisions and an audit reference to the reversed proposal. It refuses to delete new records, rewrite completed run evidence, or overwrite later edits. Retire new records instead of deleting them. For approved content whose restored revision requires a fresh decision target, prepare an explicit replacement change set with that decision; do not reuse the old approval.
 

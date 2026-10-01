@@ -197,7 +197,11 @@ class RecordChecksTest(unittest.TestCase):
 
     def test_terminal_archive_requires_exact_evidence_even_without_runtime_files(self):
         prepared = terminal_run_fixture(self.root)
-        (self.root / "results/logs/fixture-run.jsonl").unlink()
+        runtime_log = self.root / "results/logs/fixture-run.jsonl"
+        runtime_log.write_bytes(runtime_log.read_bytes() + b'{"tampered":true}\n')
+        with self.assertRaisesRegex(WorkflowError, "run log differs"):
+            validate_records(self.root)
+        runtime_log.unlink()
         put(self.root, "results/ledger.csv", "run_id,status,synthetic,config_hash\n")
         validate_records(self.root)
         archive_path = prepared["details"]["evidence_ref"]

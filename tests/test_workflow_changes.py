@@ -6,7 +6,9 @@ import copy
 import contextlib
 import io
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -442,6 +444,98 @@ class ReviewedChangesTest(unittest.TestCase):
         self.assertEqual((self.root / self.path).read_text(), self.old)
         check_manifest(self.root)
         self.assertFalse((self.root / "docs/workflow/.transaction.json").exists())
+
+    def test_killed_approval_verification_recovers_lock_without_journal(self):
+        put(self.root, "pending.json", canonical_json(self.proposal))
+        script = """
+import sys
+from pathlib import Path
+from workflow.changes import apply_approved_change
+from workflow.records import load_json
+root = Path(sys.argv[1])
+class BlockingReview:
+    def verify(self, *args):
+        print('verifying', flush=True)
+        sys.stdin.read()
+apply_approved_change(root, load_json((root / 'pending.json').read_bytes()),
+                      pull_number=7, trusted_ref='HEAD', verifier=BlockingReview())
+"""
+        with subprocess.Popen([sys.executable, "-c", script, str(self.root)], cwd=Path(__file__).resolve().parents[1],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as child:
+            try:
+                self.assertEqual(child.stdout.readline().strip(), "verifying")
+                self.assertTrue((self.root / "docs/workflow/.lock").exists())
+                self.assertFalse((self.root / "docs/workflow/.transaction.json").exists())
+                with self.assertRaisesRegex(WorkflowError, "lock"):
+                    write_manifest(self.root)
+                child.kill()
+                child.communicate(timeout=5)
+                self.assertNotEqual(child.returncode, 0)
+                self.assertTrue((self.root / "docs/workflow/.lock").exists())
+                self.assertEqual(recover(self.root), "lock-cleared")
+                self.assertFalse((self.root / "docs/workflow/.lock").exists())
+                self.assertEqual((self.root / self.path).read_text(), self.old)
+                write_manifest(self.root)
+                self.apply()
+                check_manifest(self.root)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.communicate(timeout=5)
+
+    def test_recovery_preserves_live_and_uncertain_owner_locks_without_journal(self):
+        path = self.root / "docs/workflow/.lock"
+        for content, message in ((str(os.getpid()), "still running"), ("invalid", "cannot establish"), ("0", "cannot establish")):
+            with self.subTest(content=content):
+                put(self.root, "docs/workflow/.lock", content)
+                with self.assertRaisesRegex(WorkflowError, message):
+                    recover(self.root)
+                self.assertEqual(path.read_text(), content)
+        put(self.root, "docs/workflow/.lock", str(os.getpid()))
+        with mock.patch("workflow.transaction.os.kill", side_effect=PermissionError):
+            with self.assertRaisesRegex(WorkflowError, "cannot establish"):
+                recover(self.root)
+        self.assertTrue(path.exists())
+        path.unlink()
+        with self.assertRaisesRegex(WorkflowError, "no transaction"):
+            recover(self.root)
+
+    def test_cli_reports_dead_lock_recovery_without_claiming_recovered_writes(self):
+        from workflow.__main__ import main
+        put(self.root, "docs/workflow/.lock", "123456789")
+        output = io.StringIO()
+        with mock.patch("workflow.transaction.os.kill", side_effect=ProcessLookupError), contextlib.redirect_stdout(output):
+            result = main(["--root", str(self.root), "recover"])
+        self.assertEqual(result, 0)
+        self.assertIn("abandoned lock cleared; no transaction writes", output.getvalue())
+        self.assertFalse((self.root / "docs/workflow/.lock").exists())
+        self.assertEqual((self.root / self.path).read_text(), self.old)
+
+    def test_abrupt_exit_with_journal_recovers_both_writes_and_lock(self):
+        script = """
+import os, sys
+from pathlib import Path
+from workflow import transaction
+root = Path(sys.argv[1])
+original = transaction.replace_file
+def interrupted(path, content):
+    original(path, content)
+    if path.name == 'E1.md':
+        os._exit(23)
+transaction.replace_file = interrupted
+with transaction.locked(root):
+    transaction.commit_files(root, {'docs/workflow/records/E1.md': b'Interrupted fixture write'})
+"""
+        child = subprocess.run([sys.executable, "-c", script, str(self.root)], cwd=Path(__file__).resolve().parents[1],
+                               capture_output=True, timeout=10)
+        self.assertEqual(child.returncode, 23)
+        self.assertTrue((self.root / "docs/workflow/.lock").exists())
+        self.assertTrue((self.root / "docs/workflow/.transaction.json").exists())
+        recover(self.root)
+        self.assertEqual((self.root / self.path).read_text(), self.old)
+        self.assertFalse((self.root / "docs/workflow/.lock").exists())
+        self.assertFalse((self.root / "docs/workflow/.transaction.json").exists())
+        check_manifest(self.root)
 
     def test_recovery_refuses_to_overwrite_a_concurrent_edit(self):
         from workflow import transaction
