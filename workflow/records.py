@@ -395,6 +395,26 @@ def _check_run(root, rec, replacements):
         raise WorkflowError(f"{rec.path}: missing or invalid ledger/log reference") from exc
 
 
+def validate_record_step(old: Record, new: Record, *, rollback=False):
+    """The same per-revision rules apply during application and Git-base checks."""
+    a, b, path = old.metadata, new.metadata, new.path
+    if old.path != path or a["id"] != b["id"] or a["type"] != b["type"] or b["revision"] != a["revision"] + 1:
+        raise WorkflowError(f"{path}: identity/type must be stable and revision must increment")
+    if a["created_at"] != b["created_at"]:
+        raise WorkflowError(f"{path}: created_at cannot change")
+    if not rollback and b["status"] != a["status"] and b["status"] not in TRANSITIONS[a["type"]][a["status"]]:
+        raise WorkflowError(f"{path}: invalid state transition")
+    if a.get("retirement") and not rollback:
+        raise WorkflowError(f"{path}: retired record requires reviewed rollback")
+    if a["type"] == "decision" and a["status"] != "proposed" and (b["status"] != "superseded" or a["details"] != b["details"] or a["links"] != b["links"]):
+        raise WorkflowError(f"{path}: approved/rejected decision history cannot be rewritten")
+    if a["type"] == "run" and a["status"] in {"completed", "failed", "cancelled"}:
+        old_links = [l for l in a["links"] if l["relation"] != "decision"]
+        new_links = [l for l in b["links"] if l["relation"] != "decision"]
+        if a["status"] != b["status"] or a["details"] != b["details"] or old_links != new_links or a["owner"] != b["owner"] or record_body(old.text) != record_body(new.text):
+            raise WorkflowError(f"{path}: terminal run evidence cannot be rewritten; create another run")
+
+
 def validate_change(root: Path, replacements: dict[str, str], *, rollback=False) -> RecordSet:
     before = validate_records(root)
     staged = dict(replacements)
@@ -417,22 +437,8 @@ def validate_change(root: Path, replacements: dict[str, str], *, rollback=False)
                 if safe_path(root, path).exists():
                     raise WorkflowError(f"{path}: existing identity cannot change")
             else:
-                a, b = old.metadata, new.metadata
-                if old.path != path or a["type"] != b["type"] or b["revision"] != a["revision"] + 1:
-                    raise WorkflowError(f"{path}: identity/type must be stable and revision must increment")
-                if a["created_at"] != b["created_at"]:
-                    raise WorkflowError(f"{path}: created_at cannot change")
-                if not rollback and b["status"] != a["status"] and b["status"] not in TRANSITIONS[a["type"]][a["status"]]:
-                    raise WorkflowError(f"{path}: invalid state transition")
-                if a.get("retirement") and not rollback:
-                    raise WorkflowError(f"{path}: retired record requires reviewed rollback")
-                if a["type"] == "decision" and a["status"] != "proposed" and (b["status"] != "superseded" or a["details"] != b["details"] or a["links"] != b["links"]):
-                    raise WorkflowError(f"{path}: approved/rejected decision history cannot be rewritten")
-                if a["type"] == "run" and a["status"] in {"completed", "failed", "cancelled"}:
-                    old_links = [l for l in a["links"] if l["relation"] != "decision"]
-                    new_links = [l for l in b["links"] if l["relation"] != "decision"]
-                    if a["status"] != b["status"] or a["details"] != b["details"] or old_links != new_links or a["owner"] != b["owner"] or record_body(old.text) != record_body(text):
-                        raise WorkflowError(f"{path}: terminal run evidence cannot be rewritten; create another run")
+                validate_record_step(old, new, rollback=rollback)
+                a = old.metadata
                 staged[f"{HISTORY}/{a['id']}/{a['revision']}.md"] = old.text
         elif safe_path(root, path).is_file():
             old_content = safe_path(root, path).read_bytes().decode("utf-8")

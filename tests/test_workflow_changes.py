@@ -345,6 +345,82 @@ class ReviewedChangesTest(unittest.TestCase):
         self.apply(reversal)
         self.assertEqual((self.root / "docs/workflow/history/records/E1/2.md").read_text(), self.proposal["changes"][self.path])
         check_manifest(self.root)
+        validate_tree_change(self.root, self.base)
+
+    def test_base_check_walks_each_applied_revision(self):
+        self.apply()
+        next_proposal = propose_change(self.root, {self.path: record(status="excluded", revision=3)},
+                                      author="test-agent", reason="Exclude fixture", trusted_ref="HEAD")
+        self.apply(next_proposal)
+        validate_tree_change(self.root, self.base)
+        for proposal in (self.proposal, next_proposal):
+            receipt = self.root / f"docs/workflow/history/changes/{proposal['digest']}.json"
+            saved = receipt.read_bytes()
+            receipt.unlink()
+            with self.assertRaisesRegex(WorkflowError, "receipt"):
+                validate_tree_change(self.root, self.base)
+            receipt.write_bytes(saved)
+        history = self.root / "docs/workflow/history/records/E1/2.md"
+        history.unlink()
+        with self.assertRaisesRegex(WorkflowError, "retained"):
+            validate_tree_change(self.root, self.base)
+
+    def test_new_record_can_advance_after_creation_in_same_branch(self):
+        path = "docs/workflow/records/E2.md"
+        creation = propose_change(self.root, {path: record(ident="E2")}, author="test-agent", reason="Create fixture", trusted_ref="HEAD")
+        self.apply(creation)
+        review = propose_change(self.root, {path: record(ident="E2", status="reviewed", revision=2)},
+                                author="test-agent", reason="Review new fixture", trusted_ref="HEAD")
+        self.apply(review)
+        validate_tree_change(self.root, self.base)
+
+    def test_base_check_rejects_invalid_intermediate_transition(self):
+        # Two individually valid record files can still form an invalid lifecycle step.
+        from workflow.changes import _digest
+        from workflow.records import sha256
+        self.apply()
+        next_proposal = propose_change(self.root, {self.path: record(status="excluded", revision=3)},
+                                      author="test-agent", reason="Exclude fixture", trusted_ref="HEAD")
+        self.apply(next_proposal)
+        revised = record(status="admitted", revision=3)
+        put(self.root, self.path, revised)
+        receipt_path = self.root / f"docs/workflow/history/changes/{next_proposal['digest']}.json"
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["proposal"]["changes"][self.path] = revised
+        receipt["after_hashes"][self.path] = sha256(revised)
+        # Make the first step invalid instead: captured -> excluded.
+        intermediate = record(status="excluded", revision=2)
+        put(self.root, "docs/workflow/history/records/E1/2.md", intermediate)
+        first_path = self.root / f"docs/workflow/history/changes/{self.proposal['digest']}.json"
+        first = json.loads(first_path.read_bytes())
+        first["proposal"]["changes"][self.path] = intermediate
+        first["after_hashes"][self.path] = sha256(intermediate)
+        receipt["before"][self.path] = intermediate
+        receipt["proposal"]["snapshot"][self.path] = sha256(intermediate)
+        for path, item in ((first_path, first), (receipt_path, receipt)):
+            path.unlink()
+            item["proposal"]["digest"] = _digest(item["proposal"])
+            put(self.root, f"docs/workflow/history/changes/{item['proposal']['digest']}.json", canonical_json(item))
+        write_manifest(self.root)
+        with self.assertRaisesRegex(WorkflowError, "state transition"):
+            validate_tree_change(self.root, self.base)
+
+    def test_base_check_binds_receipt_name_and_requires_real_reversal_target(self):
+        from workflow.changes import _digest
+        self.apply()
+        receipt_path = self.root / f"docs/workflow/history/changes/{self.proposal['digest']}.json"
+        renamed = receipt_path.with_name("0" * 64 + ".json")
+        receipt_path.rename(renamed)
+        with self.assertRaisesRegex(WorkflowError, "filename"):
+            validate_tree_change(self.root, self.base)
+        renamed.rename(receipt_path)
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt_path.unlink()
+        receipt["proposal"].update(mode="rollback", reverses="0" * 64)
+        receipt["proposal"]["digest"] = _digest(receipt["proposal"])
+        put(self.root, f"docs/workflow/history/changes/{receipt['proposal']['digest']}.json", canonical_json(receipt))
+        with self.assertRaisesRegex(WorkflowError, "rollback audit receipt is missing"):
+            validate_tree_change(self.root, self.base)
 
     def test_interruption_leaves_recoverable_journal(self):
         from workflow import transaction

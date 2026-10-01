@@ -11,7 +11,7 @@ python3 -m workflow rebuild
 python3 -m workflow check --base origin/main
 ```
 
-`check` verifies record metadata, exact provenance links, required decision targets, lifecycle states, committed run evidence archives, and manifest parity. `--base` also checks changed record identities, revision increments, retained history, and application receipts. It is structural validation, not authentication of a receipt's reviewer fields. The `Workflow record checks` CI job runs those checks. Live branch-protection configuration and human PR review remain externally owned acceptance controls; neither this job nor Beryl readiness proves those settings are enabled.
+`check` verifies record metadata, exact provenance links, required decision targets, lifecycle states, committed run evidence archives, and manifest parity. `--base` also walks every retained revision between the Git base and the current record, checking stable identities, one-step revision increments, lifecycle rules, and a matching application receipt for each step. A record created on the branch may advance from its retained initial revision before merge. Rollback steps must match their referenced earlier receipt and restored content; supporting decisions still follow normal decision rules. Receipt filenames must match proposal digests and receipt content must agree with the proposal. It is structural validation, not authentication of a receipt's reviewer fields. The `Workflow record checks` CI job runs those checks. Live branch-protection configuration and human PR review remain externally owned acceptance controls; neither this job nor Beryl readiness proves those settings are enabled.
 
 ## Configure trusted human review
 

@@ -6,8 +6,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .records import (HISTORY, ARTIFACT_HISTORY, RUN_EVIDENCE, MANIFEST, RECORDS, INITIAL, TRANSITIONS, WorkflowError, build_manifest, canonical_json,
-                      encode_record, parse_record, record_body, load_json, safe_path, sha256, validate_change, validate_records)
+from .records import (HISTORY, ARTIFACT_HISTORY, RUN_EVIDENCE, MANIFEST, RECORDS, INITIAL, WorkflowError, build_manifest, canonical_json,
+                      encode_record, parse_record, record_body, load_json, safe_path, sha256, validate_change, validate_records, validate_record_step)
 from .reviews import POLICY, GitHubReviews, trusted_policy, parse_policy
 from .transaction import JOURNAL, LOCK, commit_files, digest_file, locked, read_bytes
 
@@ -104,6 +104,16 @@ def propose_change(root: Path, changes: dict[str, str], *, author: str, reason: 
     return proposal
 
 
+def _restores_record(old, new, path):
+    a, b = parse_record(old, path), parse_record(new, path)
+    old_meta, new_meta = dict(a.metadata), dict(b.metadata)
+    for meta in (old_meta, new_meta):
+        meta.pop("revision")
+        # A fresh decision may target the restored higher revision.
+        meta["links"] = [l for l in meta["links"] if l["relation"] != "decision"]
+    return old_meta == new_meta and record_body(old) == record_body(new)
+
+
 def _validate_reversal(root, proposal):
     import re
     digest = proposal["reverses"]
@@ -125,14 +135,7 @@ def _validate_reversal(root, proposal):
             raise WorkflowError("rollback conflicts with a later edit")
         new = proposal["changes"][path]
         if path.startswith(RECORDS + "/"):
-            a, b = parse_record(old, path), parse_record(new, path)
-            old_meta, new_meta = dict(a.metadata), dict(b.metadata)
-            old_meta.pop("revision")
-            new_meta.pop("revision")
-            # A fresh approval decision can target the restored higher revision.
-            old_meta["links"] = [l for l in old_meta["links"] if l["relation"] != "decision"]
-            new_meta["links"] = [l for l in new_meta["links"] if l["relation"] != "decision"]
-            if old_meta != new_meta or record_body(old) != record_body(new):
+            if not _restores_record(old, new, path):
                 raise WorkflowError("rollback content must match the retained earlier version")
         elif new != old:
             raise WorkflowError("rollback content must match the retained earlier version")
@@ -258,6 +261,54 @@ def propose_rollback(root: Path, digest: str, *, author: str, reason: str, trust
     return propose_change(root, changes, author=author, reason=reason, trusted_ref=trusted_ref, mode="rollback", reverses=digest)
 
 
+def _audit_receipts(root):
+    receipts, steps = {}, {}
+    directory = safe_path(root, "docs/workflow/history/changes")
+    for path in sorted(directory.glob("*.json")):
+        receipt = load_json(safe_path(root, path.relative_to(root).as_posix()).read_bytes())
+        try:
+            proposal = receipt["proposal"]
+            if proposal["digest"] != path.stem or proposal["digest"] != _digest(proposal) or proposal["mode"] not in {"change", "rollback"}:
+                raise WorkflowError("invalid audit proposal digest or receipt filename")
+            if not isinstance(receipt["before"], dict) or not isinstance(receipt["after_hashes"], dict) or not isinstance(proposal["changes"], dict):
+                raise WorkflowError("invalid audit receipt change set")
+            if receipt["before"].keys() != proposal["changes"].keys() or receipt["after_hashes"] != {p: sha256(t) for p, t in proposal["changes"].items()}:
+                raise WorkflowError("audit receipt differs from proposal changes")
+            for target, before in receipt["before"].items():
+                if before is not None and not isinstance(before, str):
+                    raise WorkflowError("invalid audit receipt before content")
+                if proposal["snapshot"].get(target) != (None if before is None else sha256(before)):
+                    raise WorkflowError("audit receipt differs from proposal source snapshot")
+                steps.setdefault((target, before, receipt["after_hashes"][target]), []).append(receipt)
+            receipts[path.stem] = receipt
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise WorkflowError("invalid audit receipt") from exc
+    return receipts, steps
+
+
+def _check_audited_step(old, new, receipts, steps):
+    path = new.path
+    matching = steps.get((path, old.text, sha256(new.text)), [])
+    if not matching:
+        raise WorkflowError(f"record change has no applied proposal receipt: {path} revision {new.metadata['revision']}")
+    for receipt in matching:
+        proposal = receipt["proposal"]
+        rollback = False
+        if proposal["mode"] == "rollback":
+            reverse = receipts.get(proposal.get("reverses"))
+            if reverse is None:
+                raise WorkflowError("rollback audit receipt is missing")
+            original = reverse["before"].get(path)
+            restores_target = path in reverse["before"] and (original is None or parse_record(original, path).metadata["type"] != "decision")
+            if restores_target:
+                if original is None or reverse["proposal"]["changes"].get(path) != old.text or not _restores_record(original, new.text, path):
+                    raise WorkflowError("rollback step does not restore its referenced receipt")
+                rollback = True
+            elif new.metadata["type"] != "decision":
+                raise WorkflowError("additional rollback changes must be supporting decisions")
+        validate_record_step(old, new, rollback=rollback)
+
+
 def validate_tree_change(root: Path, base: str):
     """Check transitions and append-only history even for hand-edited Git changes.
 
@@ -277,33 +328,31 @@ def validate_tree_change(root: Path, base: str):
         if name.startswith(RECORDS + "/") and name.endswith(".md"):
             before_files[name] = subprocess.check_output(["git", "show", f"{commit}:{name}"], cwd=root).decode("utf-8")
     current = validate_records(root)
+    receipts, steps = _audit_receipts(root)
+    old_ids = set()
     for path, text in before_files.items():
         old = parse_record(text, path)
+        old_ids.add(old.metadata["id"])
         new = current.current.get(old.metadata["id"])
         if new is None:
             raise WorkflowError(f"current record removed; retire it instead: {path}")
         if new.text != old.text:
             a, b = old.metadata, new.metadata
-            if new.path != path or b["type"] != a["type"] or b["created_at"] != a["created_at"] or b["revision"] != a["revision"] + 1:
+            if new.path != path or b["type"] != a["type"] or b["created_at"] != a["created_at"] or b["revision"] <= a["revision"]:
                 raise WorkflowError(f"invalid record identity/revision change: {path}")
-            retained = safe_path(root, f"{HISTORY}/{a['id']}/{a['revision']}.md")
-            if not retained.is_file() or retained.read_bytes().decode("utf-8") != text:
+            retained = current.versions[(a["id"], a["revision"])]
+            if retained.text != text:
                 raise WorkflowError(f"previous record revision not retained: {path}")
-            receipts = list(safe_path(root, "docs/workflow/history/changes").glob("*.json"))
-            matching = []
-            for receipt_path in receipts:
-                receipt = load_json(safe_path(root, receipt_path.relative_to(root).as_posix()).read_bytes())
-                if receipt.get("before", {}).get(path) == text and receipt.get("after_hashes", {}).get(path) == sha256(new.text):
-                    matching.append(receipt)
-            if not matching:
-                raise WorkflowError(f"record change has no applied proposal receipt: {path}")
-            for receipt in matching:
-                proposal = receipt["proposal"]
-                if proposal["digest"] != _digest(proposal):
-                    raise WorkflowError("invalid audit proposal digest")
-                if proposal["mode"] != "rollback" and b["status"] != a["status"] and b["status"] not in TRANSITIONS[a["type"]][a["status"]]:
-                    raise WorkflowError(f"invalid state transition: {path}")
-    old_ids = {parse_record(text, path).metadata["id"] for path, text in before_files.items()}
+            for revision in range(a["revision"] + 1, b["revision"] + 1):
+                next_record = parse_record(current.versions[(a["id"], revision)].text, path)
+                _check_audited_step(old, next_record, receipts, steps)
+                old = next_record
     for ident, rec in current.current.items():
-        if ident not in old_ids and (rec.metadata["revision"] != 1 or rec.metadata["status"] != INITIAL[rec.metadata["type"]]):
-            raise WorkflowError(f"new record skips initial state: {rec.path}")
+        if ident not in old_ids:
+            old = parse_record(current.versions[(ident, 1)].text, rec.path)
+            if old.metadata["status"] != INITIAL[old.metadata["type"]]:
+                raise WorkflowError(f"new record skips initial state: {rec.path}")
+            for revision in range(2, rec.metadata["revision"] + 1):
+                next_record = parse_record(current.versions[(ident, revision)].text, rec.path)
+                _check_audited_step(old, next_record, receipts, steps)
+                old = next_record
